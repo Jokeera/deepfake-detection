@@ -30,7 +30,11 @@ import torch.nn as nn
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc as sk_auc
+from sklearn.metrics import (
+    confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc as sk_auc,
+    precision_recall_curve, average_precision_score, precision_score, recall_score,
+    f1_score as sk_f1_score,
+)
 
 try:
     from torch.amp import autocast
@@ -458,6 +462,26 @@ def train(cfg: Config):
         history["val_eer"].append(val_metrics["eer"])
 
         current_primary_metric = get_primary_metric_value(val_metrics, cfg)
+        is_best = current_primary_metric > best_primary_metric
+
+        # Append to history.csv (incremental, survives crashes)
+        history_csv_path = os.path.join(cfg.experiment_dir(), "history.csv")
+        write_header = not os.path.exists(history_csv_path)
+        with open(history_csv_path, "a", newline="", encoding="utf-8") as hf:
+            w = csv.writer(hf)
+            if write_header:
+                w.writerow([
+                    "epoch", "train_loss", "val_loss", "val_auc",
+                    "val_acc", "val_f1", "val_eer",
+                    "lr_backbone", "lr_head", "epoch_time_sec", "is_best",
+                ])
+            w.writerow([
+                epoch, round(train_loss, 4), val_metrics["loss"],
+                val_metrics["auc"], val_metrics["accuracy"],
+                val_metrics["f1"], val_metrics["eer"],
+                f"{current_lr_backbone:.8f}", f"{current_lr_head:.8f}",
+                round(epoch_time, 1), int(is_best),
+            ])
 
         if current_primary_metric > best_primary_metric:
             best_primary_metric = current_primary_metric
@@ -559,6 +583,67 @@ def train(cfg: Config):
             fig.savefig(roc_path, dpi=150)
             plt.close(fig)
             logger.info(f"ROC curve: {roc_path}")
+
+            # Precision-Recall curve
+            prec_arr, rec_arr, _ = precision_recall_curve(y_true, y_proba)
+            ap = average_precision_score(y_true, y_proba)
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ax.plot(rec_arr, prec_arr, "g-", linewidth=2, label=f"PR (AP={ap:.4f})")
+            ax.set_xlabel("Recall")
+            ax.set_ylabel("Precision")
+            ax.set_title(f"Precision-Recall Curve — {cfg.experiment_name()}")
+            ax.legend(loc="lower left")
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            pr_path = os.path.join(cfg.experiment_dir(), "pr_curve_test.png")
+            fig.savefig(pr_path, dpi=150)
+            plt.close(fig)
+            logger.info(f"PR curve: {pr_path}")
+
+            # Threshold sweep: F1, Precision, Recall vs threshold
+            thresholds = np.linspace(0.05, 0.95, 50)
+            f1s, precs, recs = [], [], []
+            for t in thresholds:
+                yp = (y_proba >= t).astype(int)
+                f1s.append(sk_f1_score(y_true, yp, zero_division=0))
+                precs.append(precision_score(y_true, yp, zero_division=0))
+                recs.append(recall_score(y_true, yp, zero_division=0))
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.plot(thresholds, f1s, "b-", linewidth=2, label="F1")
+            ax.plot(thresholds, precs, "r--", linewidth=1.5, label="Precision")
+            ax.plot(thresholds, recs, "g--", linewidth=1.5, label="Recall")
+            best_t_idx = int(np.argmax(f1s))
+            ax.axvline(thresholds[best_t_idx], color="gray", linestyle=":",
+                       label=f"Best F1={f1s[best_t_idx]:.3f} @ t={thresholds[best_t_idx]:.2f}")
+            ax.set_xlabel("Threshold")
+            ax.set_ylabel("Score")
+            ax.set_title(f"Threshold Sweep — {cfg.experiment_name()}")
+            ax.legend(loc="center left")
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            ts_path = os.path.join(cfg.experiment_dir(), "threshold_sweep_test.png")
+            fig.savefig(ts_path, dpi=150)
+            plt.close(fig)
+            logger.info(f"Threshold sweep: {ts_path}")
+
+            # Score distribution: real vs fake
+            fig, ax = plt.subplots(figsize=(7, 5))
+            real_scores = y_proba[y_true == 0]
+            fake_scores = y_proba[y_true == 1]
+            ax.hist(real_scores, bins=30, alpha=0.6, color="green", label=f"Real (n={len(real_scores)})")
+            ax.hist(fake_scores, bins=30, alpha=0.6, color="red", label=f"Fake (n={len(fake_scores)})")
+            ax.axvline(cfg.decision_threshold, color="black", linestyle="--",
+                       label=f"Threshold={cfg.decision_threshold}")
+            ax.set_xlabel("Predicted Probability (Fake)")
+            ax.set_ylabel("Count")
+            ax.set_title(f"Score Distribution — {cfg.experiment_name()}")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            sd_path = os.path.join(cfg.experiment_dir(), "score_distribution_test.png")
+            fig.savefig(sd_path, dpi=150)
+            plt.close(fig)
+            logger.info(f"Score distribution: {sd_path}")
         except Exception as e:
             logger.warning(f"Не удалось построить графики: {e}")
 
