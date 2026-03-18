@@ -1,0 +1,44 @@
+# Data & models (heavy files)
+data/
+preprocessed_frames/
+experiments/*/best_model.pt
+experiments/*/predictions.csv
+experiments/*/eval_*.json
+experiments/*/cross_dataset_eval.json
+experiments/overnight_logs/
+artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+venv/
+.venv/
+
+# Logs (keep structure, ignore big logs)
+experiments/resilient_log*.txt
+experiments/run_manifest.json
+nohup.out
+
+# Uploads from Flask app
+uploads/
