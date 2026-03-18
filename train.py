@@ -130,14 +130,17 @@ def train_one_epoch(
     device: torch.device,
     cfg: Config,
     logger=None,
-) -> float:
-    """Одна эпоха обучения."""
+) -> Dict[str, float]:
+    """Одна эпоха обучения. Returns dict with loss and train metrics."""
     model.train()
 
     total_loss = 0.0
     num_batches = 0
     total_batches = len(loader)
-    log_every = max(1, total_batches // 10)  # ~10 сообщений за эпоху
+    log_every = max(1, total_batches // 10)
+
+    all_labels: List[float] = []
+    all_proba: List[float] = []
 
     amp_enabled = cfg.use_amp and device.type == "cuda"
     amp_device_type = get_amp_device_type(device)
@@ -167,6 +170,12 @@ def train_one_epoch(
         total_loss += float(loss.item())
         num_batches += 1
 
+        # Collect predictions for train metrics (detached, no grad)
+        with torch.no_grad():
+            proba = torch.sigmoid(logits).detach().cpu().numpy().tolist()
+            all_labels.extend(labels.detach().cpu().numpy().tolist())
+            all_proba.extend(proba)
+
         if logger and num_batches % log_every == 0:
             avg_loss = total_loss / num_batches
             logger.info(
@@ -174,7 +183,14 @@ def train_one_epoch(
                 f"avg_loss={avg_loss:.4f}"
             )
 
-    return total_loss / max(num_batches, 1)
+    avg_loss = total_loss / max(num_batches, 1)
+    train_metrics = compute_metrics(
+        y_true=np.array(all_labels),
+        y_proba=np.array(all_proba),
+        threshold=cfg.decision_threshold,
+    )
+    train_metrics["loss"] = round(avg_loss, 4)
+    return train_metrics
 
 
 @torch.no_grad()
@@ -376,6 +392,8 @@ def train(cfg: Config):
 
     history = {
         "train_loss": [],
+        "train_auc": [],
+        "train_f1": [],
         "val_loss": [],
         "val_auc": [],
         "val_accuracy": [],
@@ -417,7 +435,7 @@ def train(cfg: Config):
         elif epoch == cfg.warmup_epochs + 1 and cfg.unfreeze_last_n_blocks == 0:
             logger.info("Fine-tuning пропущен: unfreeze_last_n_blocks = 0")
 
-        train_loss = train_one_epoch(
+        train_metrics = train_one_epoch(
             model=model,
             loader=train_loader,
             optimizer=optimizer,
@@ -427,6 +445,7 @@ def train(cfg: Config):
             cfg=cfg,
             logger=logger,
         )
+        train_loss = train_metrics["loss"]
 
         val_metrics = evaluate_epoch(
             model=model,
@@ -445,6 +464,7 @@ def train(cfg: Config):
         logger.info(
             f"Epoch {epoch:02d}/{cfg.max_epochs} | "
             f"Train Loss: {train_loss:.4f} | "
+            f"Train AUC: {train_metrics['auc']:.4f} | "
             f"Val Loss: {val_metrics['loss']:.4f} | "
             f"Val AUC: {val_metrics['auc']:.4f} | "
             f"Val Acc: {val_metrics['accuracy']:.4f} | "
@@ -454,7 +474,9 @@ def train(cfg: Config):
             f"Time: {epoch_time:.1f}s"
         )
 
-        history["train_loss"].append(round(train_loss, 4))
+        history["train_loss"].append(train_loss)
+        history["train_auc"].append(train_metrics["auc"])
+        history["train_f1"].append(train_metrics["f1"])
         history["val_loss"].append(val_metrics["loss"])
         history["val_auc"].append(val_metrics["auc"])
         history["val_accuracy"].append(val_metrics["accuracy"])
@@ -471,13 +493,13 @@ def train(cfg: Config):
             w = csv.writer(hf)
             if write_header:
                 w.writerow([
-                    "epoch", "train_loss", "val_loss", "val_auc",
-                    "val_acc", "val_f1", "val_eer",
+                    "epoch", "train_loss", "train_auc", "train_f1",
+                    "val_loss", "val_auc", "val_acc", "val_f1", "val_eer",
                     "lr_backbone", "lr_head", "epoch_time_sec", "is_best",
                 ])
             w.writerow([
-                epoch, round(train_loss, 4), val_metrics["loss"],
-                val_metrics["auc"], val_metrics["accuracy"],
+                epoch, train_loss, train_metrics["auc"], train_metrics["f1"],
+                val_metrics["loss"], val_metrics["auc"], val_metrics["accuracy"],
                 val_metrics["f1"], val_metrics["eer"],
                 f"{current_lr_backbone:.8f}", f"{current_lr_head:.8f}",
                 round(epoch_time, 1), int(is_best),
