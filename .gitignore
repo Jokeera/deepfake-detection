@@ -5,8 +5,11 @@ experiments/*/best_model.pt
 experiments/*/predictions.csv
 experiments/*/eval_*.json
 experiments/*/cross_dataset_eval.json
-experiments/overnight_logs/
 artifacts/
+
+# Kaggle output (re-downloadable)
+kaggle_output/
+kaggle.json
 
 # Python
 __pycache__/
@@ -35,10 +38,22 @@ Thumbs.db
 venv/
 .venv/
 
-# Logs (keep structure, ignore big logs)
+# Logs
 experiments/resilient_log*.txt
 experiments/run_manifest.json
+experiments/overnight_logs/
 nohup.out
 
 # Uploads from Flask app
 uploads/
+
+# Generated presentation (re-creatable via create_presentation.py)
+presentation_defense.pptx
+
+# EDA heavy reports (re-generatable from notebooks)
+EDA/reports_final/FULL_EDA_REPORT.*
+EDA/reports_final/clean/
+EDA/reports_final/interim/
+EDA/reports_final/manifests/
+EDA/reports_final/plots/
+EDA/reports_final/tables/
