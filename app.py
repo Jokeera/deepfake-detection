@@ -29,8 +29,6 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 MODEL_SEARCH_DIRS = [
     Path("./experiments"),
-    Path("./experiments_dfdc02"),
-    Path("./experiments_dfd01"),
 ]
 
 INLINE_VIDEO_MAX_MB = 25
@@ -41,52 +39,52 @@ LANGS = {"ru", "en"}
 TRANSLATIONS = {
     "ru": {
         "page_title": "Deepfake Detection MVP",
-        "hero_subtitle": "Загрузите одно видео или одну папку с кадрами, выберите найденный checkpoint и выполните video-level deepfake inference с сохранением JSON-результата.",
-        "hero_badge": "Flask интерфейс · single-sample inference",
+        "hero_subtitle": "Анализ видео на наличие deepfake-манипуляций",
+        "hero_badge": "Video-level deepfake detection",
 
         "run_inference": "Запуск инференса",
-        "run_subtitle": "Минимальный и понятный сценарий ввода, стабильное поведение backend и чистый результат для smoke-test и демо ВКР.",
+        "run_subtitle": "Загрузите видео или папку с кадрами и выберите модель.",
 
         "model": "Модель",
-        "model_hint": "Короткие human-readable названия. Рекомендуемый checkpoint выбирается автоматически.",
+        "model_hint": "Рекомендуемый checkpoint выбирается автоматически.",
         "no_models_found": "Модели не найдены",
 
         "input_mode": "Режим входа",
-        "input_mode_hint": "Используйте raw video или одну папку с заранее извлечёнными кадрами.",
+        "input_mode_hint": "Видеофайл или папка с извлечёнными кадрами.",
 
         "device": "Устройство",
-        "device_hint": "Auto выбирает лучшее доступное устройство. Неподдерживаемые операции на MPS автоматически переводятся на CPU.",
+        "device_hint": "Auto выбирает лучшее доступное устройство.",
 
         "clip_length": "Длина клипа для инференса",
-        "clip_length_hint": "Это значение берётся из config выбранного checkpoint. Свободное переключение 16 / 20 / 40 / 60 намеренно отключено ради корректности.",
+        "clip_length_hint": "Определяется конфигурацией модели.",
         "clip_length_unknown": "Будет прочитано из checkpoint после выбора",
 
         "upload_video": "Загрузить видео",
-        "upload_video_hint": "Поддерживаемые форматы: mp4, avi, mov, mkv, webm, m4v. Одиночная картинка не подходит для video-level inference.",
+        "upload_video_hint": "Форматы: mp4, avi, mov, mkv, webm, m4v.",
         "no_file_selected": "Файл не выбран.",
 
         "upload_frames": "Загрузить папку с кадрами",
-        "upload_frames_hint": "Одна последовательность на одну папку. Поддерживаются JPG, PNG и BMP.",
+        "upload_frames_hint": "JPG, PNG, BMP. Одна папка — одно видео.",
         "no_frames_selected": "Кадры не выбраны.",
 
         "run_button": "Запустить инференс",
         "running_button": "Идёт инференс...",
 
         "session_summary": "Сводка сессии",
-        "session_subtitle": "Текущий выбор и важные ограничения запуска.",
+        "session_subtitle": "Текущие параметры запуска.",
         "selected_model": "Выбранная модель",
-        "selected_model_sub": "Рекомендуемый DFDC02 full adaptive checkpoint автоматически приоритизируется, если доступен.",
+        "selected_model_sub": "",
         "selected_input_mode": "Режим входа",
-        "selected_input_mode_sub": "Raw video использует internal MTCNN face extraction. Папка кадров предполагает, что preprocessing уже выполнен.",
+        "selected_input_mode_sub": "",
         "requested_device": "Запрошенное устройство",
-        "requested_device_sub": "Кроссплатформенный inference сохранён. Flask добавляет только безопасный fallback для нестабильных MPS runtime-case.",
+        "requested_device_sub": "",
         "current_source": "Текущий источник",
-        "current_source_sub": "Интерфейс не требует ручного ввода путей и соответствует текущему пайплайну ВКР.",
+        "current_source_sub": "",
         "important_limits": "Важные ограничения",
         "important_limits_value": "Face-centric · главное лицо · максимум 300 MB",
-        "important_limits_sub": "Если в raw video не найдено лицо, инференс завершится понятной ошибкой. В multi-face сценах сейчас используется самое крупное лицо.",
+        "important_limits_sub": "Анализируется наибольшее лицо в кадре.",
 
-        "info_note": "Важно: текущая длина клипа для инференса фиксируется config выбранного checkpoint. Свободное переключение 16 / 20 / 40 / 60 намеренно отключено, чтобы не ломать корректность thesis-пайплайна.",
+        "info_note": "",
 
         "completed_successfully": "Успешно завершено",
         "completed_with_fallback": "Завершено с fallback устройства",
@@ -161,7 +159,7 @@ TRANSLATIONS = {
     "en": {
         "page_title": "Deepfake Detection MVP",
         "hero_subtitle": "Upload one video or one frames folder, choose a discovered checkpoint, and run video-level deepfake inference with saved JSON output.",
-        "hero_badge": "Flask interface · single-sample inference",
+        "hero_badge": "Video-level deepfake detection",
 
         "run_inference": "Run inference",
         "run_subtitle": "Minimal input flow, stable backend behavior, and clean output for smoke-testing and thesis demo.",
@@ -174,38 +172,38 @@ TRANSLATIONS = {
         "input_mode_hint": "Use raw video or one folder of pre-extracted frames.",
 
         "device": "Device",
-        "device_hint": "Auto selects the best available device. Unsupported MPS operations automatically fall back to CPU.",
+        "device_hint": "Auto selects the best available device.",
 
         "clip_length": "Inference clip length",
         "clip_length_hint": "This value is read from the selected checkpoint config. Free 16 / 20 / 40 / 60 switching is intentionally disabled for correctness.",
         "clip_length_unknown": "Will be read from checkpoint after selection",
 
         "upload_video": "Upload video",
-        "upload_video_hint": "Supported formats: mp4, avi, mov, mkv, webm, m4v. A single image is not valid for video-level inference.",
+        "upload_video_hint": "Formats: mp4, avi, mov, mkv, webm, m4v.",
         "no_file_selected": "No file selected.",
 
         "upload_frames": "Upload frames folder",
-        "upload_frames_hint": "One clip per folder. JPG, PNG and BMP files are supported.",
+        "upload_frames_hint": "JPG, PNG, BMP. One folder per video.",
         "no_frames_selected": "No frames selected.",
 
         "run_button": "Run inference",
         "running_button": "Running inference...",
 
         "session_summary": "Session summary",
-        "session_subtitle": "Current selection and important run constraints.",
+        "session_subtitle": "Current parameters.",
         "selected_model": "Selected model",
         "selected_model_sub": "Recommended DFDC02 full adaptive checkpoint is prioritized automatically when available.",
         "selected_input_mode": "Input mode",
-        "selected_input_mode_sub": "Raw video uses internal MTCNN face extraction. Frames folder assumes preprocessing is already done.",
+        "selected_input_mode_sub": "",
         "requested_device": "Requested device",
         "requested_device_sub": "Cross-platform inference is preserved. Flask adds only safe fallback behavior for unstable MPS runtime cases.",
         "current_source": "Current source",
         "current_source_sub": "The interface avoids manual path entry and stays aligned with your thesis inference flow.",
         "important_limits": "Important limits",
         "important_limits_value": "Face-centric · dominant face · 300 MB max upload",
-        "important_limits_sub": "If no face is detected in raw video, inference stops with a clear error. Multi-face scenes currently use the largest detected face.",
+        "important_limits_sub": "Analyzes the largest face in frame.",
 
-        "info_note": "Important: current inference clip length is fixed by the selected checkpoint config. Free 16 / 20 / 40 / 60 switching is intentionally disabled to keep the thesis pipeline correct.",
+        "info_note": "",
 
         "completed_successfully": "Completed successfully",
         "completed_with_fallback": "Completed with device fallback",
@@ -550,6 +548,10 @@ HTML = """
             color: var(--muted);
             font-size: 13px;
             line-height: 1.45;
+        }
+
+        .summary-sub:empty {
+            display: none;
         }
 
         .alert {
