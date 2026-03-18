@@ -203,7 +203,11 @@ def evaluate_epoch(
             logits, _ = model(spatial, temporal)
             loss = criterion(logits, labels)
 
+        # Guard against AMP fp16 overflow producing nan
+        if not torch.isfinite(loss):
+            continue
         proba = torch.sigmoid(logits)
+        proba = torch.clamp(proba, 0.0, 1.0)
 
         total_loss += float(loss.item())
         num_batches += 1
