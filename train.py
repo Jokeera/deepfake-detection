@@ -384,6 +384,24 @@ def train(cfg: Config):
             and hasattr(model, "unfreeze_spatial_backbone")
         ):
             model.unfreeze_spatial_backbone()
+
+            # Добавляем размороженные параметры backbone в оптимизатор
+            newly_unfrozen = [
+                p for name, p in model.named_parameters()
+                if "spatial_branch.backbone" in name and p.requires_grad
+                and not any(p is existing for group in optimizer.param_groups
+                            for existing in group["params"])
+            ]
+            if newly_unfrozen:
+                optimizer.add_param_group({
+                    "params": newly_unfrozen,
+                    "lr": cfg.lr_backbone,
+                })
+                logger.info(
+                    f"Добавлено {len(newly_unfrozen)} размороженных "
+                    f"параметров backbone в оптимизатор"
+                )
+
             logger.info(
                 f"Fine-tuning: разморожены последние "
                 f"{cfg.unfreeze_last_n_blocks} блока spatial backbone"
@@ -476,7 +494,7 @@ def train(cfg: Config):
         map_location=device,
         weights_only=False,
     )
-    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
 
     logger.info(
         f"Загружен чекпоинт эпохи {checkpoint['epoch']} "

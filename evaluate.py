@@ -332,7 +332,7 @@ def main():
     print(f"Оценка на split='{args.split}': {len(eval_loader.dataset)} видео")
 
     model = build_model(cfg)
-    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
     model = model.to(device)
 
     print(

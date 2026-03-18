@@ -368,8 +368,9 @@ def extract_face_frames_from_video(
     if len(saved_faces) == 0:
         raise RuntimeError("Не удалось извлечь ни одного face crop из видео.")
 
+    original_count = len(saved_faces)
     while len(saved_faces) < cfg.num_frames:
-        saved_faces.append(saved_faces[len(saved_faces) % len(saved_faces)])
+        saved_faces.append(saved_faces[len(saved_faces) % original_count])
 
     return saved_faces[:cfg.num_frames]
 
@@ -458,9 +459,7 @@ def load_checkpoint_and_cfg(
     cfg.validate()
 
     model = build_model(cfg).to(device)
-    # strict=False для обратной совместимости при изменении архитектуры
-    # (например, добавление BatchNorm в ClassificationHead)
-    model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
     model.eval()
 
     return checkpoint, cfg, model
