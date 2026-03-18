@@ -601,7 +601,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input_root", type=str, help="Корень raw video dataset")
     parser.add_argument("output_root", type=str, help="Куда сохранять processed face frames")
 
-    parser.add_argument("--max-frames", type=int, default=16, help="Максимум кадров на видео")
+    parser.add_argument("--max-frames", type=int, default=None,
+                        help="Максимум кадров на видео (default: из config.py num_frames)")
     parser.add_argument("--output-size", type=int, default=224, help="Размер face crop")
     parser.add_argument("--min-face-confidence", type=float, default=0.90, help="Порог confidence")
     parser.add_argument("--min-detection-ratio", type=float, default=0.55, help="Минимальная доля удачных detections")
@@ -620,10 +621,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    # If --max-frames not specified, use num_frames from main Config
+    from config import Config as TrainConfig
+    max_frames = args.max_frames if args.max_frames is not None else TrainConfig().num_frames
+
     cfg = PreprocessConfig(
         input_root=args.input_root,
         output_root=args.output_root,
-        max_frames=args.max_frames,
+        max_frames=max_frames,
         output_size=args.output_size,
         min_face_confidence=args.min_face_confidence,
         min_detection_ratio=args.min_detection_ratio,
