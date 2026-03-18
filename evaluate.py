@@ -95,7 +95,11 @@ def evaluate_model(
             logits, alpha = model(spatial, temporal)
             loss = criterion(logits, labels)
 
-        proba = torch.sigmoid(logits).detach().cpu().numpy()
+        # Guard against AMP fp16 overflow
+        if not torch.isfinite(loss):
+            continue
+        proba = torch.sigmoid(logits).detach().cpu()
+        proba = torch.clamp(proba, 0.0, 1.0).numpy()
 
         total_loss += float(loss.item())
         num_batches += 1
@@ -366,7 +370,29 @@ def main():
     preds = results["predictions"]
     fn = [p for p in preds if p["label"] == 1 and p["proba"] < cfg.decision_threshold]
     fp = [p for p in preds if p["label"] == 0 and p["proba"] >= cfg.decision_threshold]
-    print(f"\nОшибки: {len(fn)} FN, {len(fp)} FP")
+    print(f"\nОшибки: {len(fn)} FN (пропущенные fake), {len(fp)} FP (ложные fake)")
+
+    # Save detailed error analysis
+    error_report = {
+        "false_negatives": sorted(fn, key=lambda x: x["proba"]),
+        "false_positives": sorted(fp, key=lambda x: -x["proba"]),
+        "fn_count": len(fn),
+        "fp_count": len(fp),
+        "total": len(preds),
+        "error_rate": round((len(fn) + len(fp)) / max(len(preds), 1), 4),
+    }
+    error_path = os.path.join(exp_dir, f"error_analysis_{args.split}.json")
+    save_metrics(error_report, error_path)
+    print(f"Error analysis: {error_path}")
+
+    if fn:
+        print(f"\n  Worst FN (fake missed, lowest proba):")
+        for p in fn[:5]:
+            print(f"    {p['video_id']}: proba={p['proba']:.4f}")
+    if fp:
+        print(f"\n  Worst FP (real flagged, highest proba):")
+        for p in fp[:5]:
+            print(f"    {p['video_id']}: proba={p['proba']:.4f}")
 
     # Сохраняем confusion matrix и ROC curve
     y_true = np.array([p["label"] for p in preds])
