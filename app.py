@@ -158,24 +158,24 @@ TRANSLATIONS = {
     },
     "en": {
         "page_title": "Deepfake Detection MVP",
-        "hero_subtitle": "Upload one video or one frames folder, choose a discovered checkpoint, and run video-level deepfake inference with saved JSON output.",
+        "hero_subtitle": "Analyze videos for deepfake manipulations",
         "hero_badge": "Video-level deepfake detection",
 
         "run_inference": "Run inference",
-        "run_subtitle": "Minimal input flow, stable backend behavior, and clean output for smoke-testing and thesis demo.",
+        "run_subtitle": "Upload a video or frame folder and select a model.",
 
         "model": "Model",
-        "model_hint": "Short human-readable labels. Recommended checkpoint is selected automatically.",
+        "model_hint": "Recommended checkpoint is auto-selected.",
         "no_models_found": "No models found",
 
         "input_mode": "Input mode",
-        "input_mode_hint": "Use raw video or one folder of pre-extracted frames.",
+        "input_mode_hint": "Video file or folder of extracted frames.",
 
         "device": "Device",
         "device_hint": "Auto selects the best available device.",
 
         "clip_length": "Inference clip length",
-        "clip_length_hint": "This value is read from the selected checkpoint config. Free 16 / 20 / 40 / 60 switching is intentionally disabled for correctness.",
+        "clip_length_hint": "Determined by model configuration.",
         "clip_length_unknown": "Will be read from checkpoint after selection",
 
         "upload_video": "Upload video",
@@ -192,13 +192,13 @@ TRANSLATIONS = {
         "session_summary": "Session summary",
         "session_subtitle": "Current parameters.",
         "selected_model": "Selected model",
-        "selected_model_sub": "Recommended DFDC02 full adaptive checkpoint is prioritized automatically when available.",
+        "selected_model_sub": "",
         "selected_input_mode": "Input mode",
         "selected_input_mode_sub": "",
         "requested_device": "Requested device",
-        "requested_device_sub": "Cross-platform inference is preserved. Flask adds only safe fallback behavior for unstable MPS runtime cases.",
+        "requested_device_sub": "",
         "current_source": "Current source",
-        "current_source_sub": "The interface avoids manual path entry and stays aligned with your thesis inference flow.",
+        "current_source_sub": "",
         "important_limits": "Important limits",
         "important_limits_value": "Face-centric · dominant face · 300 MB max upload",
         "important_limits_sub": "Analyzes the largest face in frame.",
@@ -209,7 +209,7 @@ TRANSLATIONS = {
         "completed_with_fallback": "Completed with device fallback",
 
         "inference_result": "Inference result",
-        "result_subtitle": "Prediction summary, run metadata, and structured output for demo presentation.",
+        "result_subtitle": "Prediction summary and structured output.",
 
         "prediction": "Prediction",
         "probability_fake": "Probability fake",
