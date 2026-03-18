@@ -324,8 +324,8 @@ HTML = """
             font-family: Inter, Arial, sans-serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(255,255,255,0.9), rgba(255,255,255,0) 35%),
-                linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+                linear-gradient(180deg, rgba(244,247,251,0.72) 0%, rgba(237,242,247,0.68) 100%),
+                url('/static/bgimage.png') center/cover no-repeat fixed;
         }
 
         .page {
