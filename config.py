@@ -185,7 +185,7 @@ class Config:
     max_grad_norm: float = 1.0
 
     # Early stopping по val AUC
-    patience: int = 5
+    patience: int = 7
 
     # Warmup: сколько эпох spatial backbone заморожен.
     # Оставляем для стабильного старта.

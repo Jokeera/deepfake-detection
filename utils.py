@@ -20,7 +20,10 @@ from typing import Any, Dict
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, roc_curve
+from sklearn.metrics import (
+    accuracy_score, balanced_accuracy_score, f1_score,
+    roc_auc_score, roc_curve, average_precision_score,
+)
 
 
 # =============================================================================
@@ -94,10 +97,16 @@ def compute_metrics(
         auc = 0.0
 
     acc = float(accuracy_score(y_true, y_pred))
+    bal_acc = float(balanced_accuracy_score(y_true, y_pred))
     f1 = float(f1_score(y_true, y_pred, zero_division=0))
 
     try:
-        fpr, tpr, _ = roc_curve(y_true, y_proba)
+        ap = float(average_precision_score(y_true, y_proba))
+    except ValueError:
+        ap = 0.0
+
+    try:
+        fpr, tpr, thresholds = roc_curve(y_true, y_proba)
         fnr = 1.0 - tpr
         eer_idx = int(np.nanargmin(np.abs(fpr - fnr)))
         eer = float((fpr[eer_idx] + fnr[eer_idx]) / 2.0)
@@ -107,6 +116,8 @@ def compute_metrics(
     return {
         "auc": round(auc, 4),
         "accuracy": round(acc, 4),
+        "balanced_accuracy": round(bal_acc, 4),
+        "ap": round(ap, 4),
         "f1": round(f1, 4),
         "eer": round(eer, 4),
     }

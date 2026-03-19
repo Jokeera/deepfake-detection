@@ -156,6 +156,11 @@ def train_one_epoch(
             logits, _ = model(spatial, temporal)
             loss = criterion(logits, labels)
 
+        if not torch.isfinite(loss):
+            logger.warning(f"Non-finite loss detected: {loss.item()}. Skipping batch.")
+            optimizer.zero_grad(set_to_none=True)
+            continue
+
         if amp_enabled:
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)

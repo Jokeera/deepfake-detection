@@ -242,12 +242,8 @@ def run_cross_dataset_eval(
         exp_name = result["experiment_name"]
         exp_config = next(e for e in experiments if e["name"] == exp_name)
 
-        cfg = make_cfg(base_cfg, exp_config)
-        cfg.dataset_root = cross_dataset_root
-        cfg.dataset_name = cross_dataset_name
-
-        checkpoint_path = result.get("checkpoint_path", cfg.checkpoint_path())
-        if not os.path.exists(checkpoint_path):
+        checkpoint_path = result.get("checkpoint_path")
+        if not checkpoint_path or not os.path.exists(checkpoint_path):
             print(f"[ПРОПУСК] Чекпоинт не найден: {checkpoint_path}")
             continue
 
@@ -257,8 +253,17 @@ def run_cross_dataset_eval(
             weights_only=False,
         )
 
+        # Restore config from checkpoint for architecture consistency
+        cfg = Config()
+        for k, v in checkpoint.get("config", {}).items():
+            if hasattr(cfg, k):
+                setattr(cfg, k, v)
+        cfg.dataset_root = cross_dataset_root
+        cfg.dataset_name = cross_dataset_name
+        cfg.device = str(device)
+
         model = build_model(cfg).to(device)
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint["model_state_dict"], strict=True)
 
         cross_ds = DeepfakeVideoDataset(cross_index, cfg, is_train=False)
         cross_loader = DataLoader(
