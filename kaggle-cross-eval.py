@@ -47,10 +47,22 @@ def find_checkpoints(checkpoints_dir: str) -> List[Dict]:
                 m = json.load(f)
             orig_auc = m.get("test", {}).get("auc")
 
+        # model_type: prefer metrics.json, fallback to checkpoint config
+        model_type = "?"
+        if metrics_path.exists():
+            model_type = m.get("model_type", "?")
+        if model_type == "?":
+            try:
+                ckpt_meta = torch.load(str(pt), map_location="cpu", weights_only=False)
+                model_type = ckpt_meta.get("config", {}).get("model_type", "?")
+                del ckpt_meta
+            except Exception:
+                pass
+
         found.append({
             "path": str(pt),
             "exp_dir": exp_dir,
-            "model_type": m.get("model_type", "?") if metrics_path.exists() else "?",
+            "model_type": model_type,
             "orig_test_auc": orig_auc,
         })
 
@@ -113,7 +125,7 @@ def evaluate_cross_dataset(
 
     probs_arr = np.array(all_probs)
     labels_arr = np.array(all_labels)
-    metrics = compute_metrics(probs_arr, labels_arr)
+    metrics = compute_metrics(labels_arr, probs_arr)
 
     # Per-class metrics for imbalanced datasets
     preds = (probs_arr >= 0.5).astype(int)
@@ -168,15 +180,23 @@ def main():
     for c in checkpoints:
         sys.stdout.flush(); print(f"  {c['exp_dir']} (type={c['model_type']}, orig AUC={c['orig_test_auc']})")
 
+    # Determine min frames from first checkpoint config
+    min_frames = 16
+    if checkpoints:
+        first_ckpt = torch.load(checkpoints[0]["path"], map_location="cpu", weights_only=False)
+        min_frames = first_ckpt.get("config", {}).get("num_frames", 16)
+        del first_ckpt
+    sys.stdout.flush(); print(f"Min frames filter: {min_frames} (from checkpoint config)")
+
     # Load cross-dataset and filter short videos
     cross_index_raw = build_video_index(args.cross_dataset)
-    cross_index = [v for v in cross_index_raw if len(v.get("frames", [])) >= 16]
+    cross_index = [v for v in cross_index_raw if len(v.get("frames", [])) >= min_frames]
     skipped = len(cross_index_raw) - len(cross_index)
     num_real = sum(1 for v in cross_index if v["label"] == 0)
     num_fake = sum(1 for v in cross_index if v["label"] == 1)
     sys.stdout.flush(); print(f"\nCross-dataset: {len(cross_index)} videos (real={num_real}, fake={num_fake})")
     if skipped:
-        sys.stdout.flush(); print(f"  Filtered out {skipped} videos with <16 frames")
+        sys.stdout.flush(); print(f"  Filtered out {skipped} videos with <{min_frames} frames")
     if num_real > 0 and num_fake > 0:
         ratio = num_fake / num_real
         sys.stdout.flush(); print(f"  Imbalance ratio (fake/real): {ratio:.1f}:1")
@@ -214,15 +234,15 @@ def main():
           f"real={num_real}, fake={num_fake})")
     print("=" * 100)
     sys.stdout.flush(); print(f"{'Model':<30} {'DFDC02 AUC':>11} {'DFD01 AUC':>10} {'Δ AUC':>8} "
-          f"{'Bal.Acc':>8} {'Real Acc':>9} {'Fake Acc':>9} {'EER':>7}")
-    print("-" * 100)
+          f"{'AP':>7} {'Bal.Acc':>8} {'Real Acc':>9} {'Fake Acc':>9} {'EER':>7}")
+    print("-" * 110)
     for r in all_results:
         m = r["cross_dataset_metrics"]
         delta = m["auc"] - r["orig_test_auc"]
         sys.stdout.flush(); print(f"{r['exp_dir']:<30} {r['orig_test_auc']:>11.4f} {m['auc']:>10.4f} "
-              f"{delta:>+8.4f} {m['balanced_accuracy']:>8.4f} "
+              f"{delta:>+8.4f} {m.get('ap', 0):>7.4f} {m['balanced_accuracy']:>8.4f} "
               f"{m['real_accuracy']:>9.4f} {m['fake_accuracy']:>9.4f} {m['eer']:>7.4f}")
-    print("=" * 100)
+    print("=" * 110)
 
     # Save results
     output_path = os.path.join(args.output_dir, "cross_eval_results.json")

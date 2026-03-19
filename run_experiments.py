@@ -81,6 +81,7 @@ def make_cfg(base_cfg: Config, exp_config: Dict) -> Config:
     cfg = deepcopy(base_cfg)
     cfg.model_type = exp_config["model_type"]
     cfg.fusion_type = exp_config["fusion_type"]
+    cfg.validate()
     return cfg
 
 

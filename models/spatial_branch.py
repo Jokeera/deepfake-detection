@@ -103,7 +103,7 @@ class SpatialBranch(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        if hasattr(self.backbone, "blocks"):
+        if hasattr(self.backbone, "blocks") and unfreeze_last_n_blocks > 0:
             blocks = list(self.backbone.blocks)
             for block in blocks[-unfreeze_last_n_blocks:]:
                 for param in block.parameters():

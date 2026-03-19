@@ -141,16 +141,22 @@ def frames_to_tensors(
     spatial_frames: List[np.ndarray] = []
     temporal_frames: List[np.ndarray] = []
 
+    def _pick_interp(src_h: int, src_w: int, target: int) -> int:
+        if src_h >= target and src_w >= target:
+            return cv2.INTER_AREA
+        return cv2.INTER_LANCZOS4
+
     for frame_rgb in frames_rgb:
+        h, w = frame_rgb.shape[:2]
         spatial_img = cv2.resize(
             frame_rgb,
             (cfg.spatial_size, cfg.spatial_size),
-            interpolation=cv2.INTER_AREA,
+            interpolation=_pick_interp(h, w, cfg.spatial_size),
         )
         temporal_img = cv2.resize(
             frame_rgb,
             (cfg.temporal_size, cfg.temporal_size),
-            interpolation=cv2.INTER_AREA,
+            interpolation=_pick_interp(h, w, cfg.temporal_size),
         )
         spatial_frames.append(spatial_img)
         temporal_frames.append(temporal_img)
@@ -356,10 +362,15 @@ def extract_face_frames_from_video(
                     break
 
         if face_crop is not None:
+            h_crop, w_crop = face_crop.shape[:2]
+            if h_crop >= cfg.spatial_size and w_crop >= cfg.spatial_size:
+                interp = cv2.INTER_AREA
+            else:
+                interp = cv2.INTER_LANCZOS4
             face_crop = cv2.resize(
                 face_crop,
                 (cfg.spatial_size, cfg.spatial_size),
-                interpolation=cv2.INTER_AREA,
+                interpolation=interp,
             )
             saved_faces.append(face_crop)
 

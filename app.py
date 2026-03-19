@@ -28,7 +28,20 @@ VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 def _discover_model_dirs() -> List[Path]:
-    """Auto-discover all directories that may contain best_model.pt."""
+    """Auto-discover all directories that may contain best_model.pt.
+    If --experiments-dir was passed via CLI, use only that directory."""
+    import sys
+    # Check for --experiments-dir CLI argument
+    if "--experiments-dir" in sys.argv:
+        idx = sys.argv.index("--experiments-dir")
+        if idx + 1 < len(sys.argv):
+            explicit = Path(sys.argv[idx + 1])
+            if explicit.is_dir():
+                print(f"[app] Using explicit experiments dir: {explicit}")
+                return [explicit]
+            else:
+                print(f"[app] WARNING: --experiments-dir {explicit} not found, falling back to auto-discovery")
+
     candidates = [Path("./experiments")]
     project = Path(__file__).parent
     # Scan kaggle_output and any experiments* dirs
@@ -1793,7 +1806,8 @@ def run_app_inference(checkpoint_path_str: str, input_path: Path, device_name: s
     else:
         payload["device_fallback_used"] = False
 
-    save_dir = checkpoint_path.parent
+    save_dir = Path("./app_results")
+    save_dir.mkdir(parents=True, exist_ok=True)
     safe_name = Path(payload["input"]["source_path"]).stem.replace(" ", "_")
     out_json = save_dir / f"app_infer_{safe_name}.json"
 

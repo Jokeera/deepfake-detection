@@ -171,13 +171,13 @@ def infer_label_from_path(video_path: Path) -> str:
     Строго определяет label по пути.
     """
     parts = [p.lower() for p in video_path.parts]
-    full = " / ".join(parts)
 
     real_keywords = {"real", "original", "pristine", "actors"}
     fake_keywords = {"fake", "manipulated", "altered", "deepfake", "df"}
 
-    has_real = any(k in parts or k in full for k in real_keywords)
-    has_fake = any(k in parts or k in full for k in fake_keywords)
+    # Substring-поиск по каждой части пути отдельно (не по всему пути)
+    has_real = any(kw in part for part in parts for kw in real_keywords)
+    has_fake = any(kw in part for part in parts for kw in fake_keywords)
 
     if has_real and not has_fake:
         return "real"
@@ -251,29 +251,6 @@ def safe_read_frame(cap: cv2.VideoCapture, frame_index: int) -> Optional[np.ndar
 # FACE DETECTION / CROPPING
 # =============================================================================
 
-def choose_largest_box(
-    boxes: Optional[np.ndarray],
-    probs: Optional[np.ndarray],
-    min_conf: float,
-) -> Optional[np.ndarray]:
-    if boxes is None or probs is None or len(boxes) == 0:
-        return None
-
-    valid = []
-    for box, prob in zip(boxes, probs):
-        if prob is None:
-            continue
-        if float(prob) >= min_conf:
-            x1, y1, x2, y2 = box
-            area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
-            valid.append((area, box))
-
-    if not valid:
-        return None
-
-    valid.sort(key=lambda x: x[0], reverse=True)
-    return np.asarray(valid[0][1], dtype=np.float32)
-
 
 def expand_box(
     box: np.ndarray,
@@ -297,15 +274,23 @@ def expand_box(
     return nx1, ny1, nx2, ny2
 
 
+@dataclass
+class FaceDetectionResult:
+    crop: np.ndarray
+    confidence: float
+    bbox: Tuple[int, int, int, int]  # x1, y1, x2, y2 (expanded)
+    n_faces_in_frame: int
+
+
 def detect_face_crop(
     detector: MTCNN,
     frame_rgb: np.ndarray,
     min_conf: float,
     margin_ratio: float,
     detector_max_side: int,
-) -> Optional[np.ndarray]:
+) -> Optional[FaceDetectionResult]:
     """
-    Возвращает face crop как RGB numpy array или None.
+    Возвращает face crop + metadata или None.
     """
     orig_h, orig_w = frame_rgb.shape[:2]
 
@@ -313,11 +298,26 @@ def detect_face_crop(
     pil_img = Image.fromarray(det_input)
 
     boxes, probs = detector.detect(pil_img)
-    best_box = choose_largest_box(boxes, probs, min_conf)
+
+    n_faces = 0
+    best_box = None
+    best_conf = 0.0
+
+    if boxes is not None and probs is not None:
+        for box, prob in zip(boxes, probs):
+            if prob is not None and float(prob) >= min_conf:
+                n_faces += 1
+                area = max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+                if best_box is None or area > (
+                    max(0.0, best_box[2] - best_box[0]) * max(0.0, best_box[3] - best_box[1])
+                ):
+                    best_box = box
+                    best_conf = float(prob)
 
     if best_box is None:
         return None
 
+    best_box = np.asarray(best_box, dtype=np.float32)
     if scale != 1.0:
         best_box = best_box / scale
 
@@ -332,35 +332,48 @@ def detect_face_crop(
     if crop.size == 0:
         return None
 
-    return crop
+    return FaceDetectionResult(
+        crop=crop,
+        confidence=round(best_conf, 4),
+        bbox=(x1, y1, x2, y2),
+        n_faces_in_frame=n_faces,
+    )
 
 
 def resize_face_crop(face_rgb: np.ndarray, output_size: int) -> np.ndarray:
-    return cv2.resize(face_rgb, (output_size, output_size), interpolation=cv2.INTER_AREA)
+    h, w = face_rgb.shape[:2]
+    # INTER_AREA для downscaling, INTER_LANCZOS4 для upscaling
+    if h >= output_size and w >= output_size:
+        interp = cv2.INTER_AREA
+    else:
+        interp = cv2.INTER_LANCZOS4
+    return cv2.resize(face_rgb, (output_size, output_size), interpolation=interp)
 
 
 # =============================================================================
 # TEMPORAL UTILS
 # =============================================================================
 
-def longest_contiguous_run(indices: Sequence[int]) -> int:
+def longest_contiguous_detections(detection_mask: Sequence[bool]) -> int:
     """
     Оценивает длину самой длинной непрерывной последовательности
-    по уже использованным frame indices.
+    успешных детекций лиц среди target-кадров клипа.
+
+    detection_mask: список bool — True если лицо найдено, False если нет.
+    Порядок соответствует target_indices (т.е. порядку кадров в клипе).
     """
-    if not indices:
+    if not detection_mask:
         return 0
 
-    sorted_idx = sorted(indices)
-    best = 1
-    cur = 1
+    best = 0
+    cur = 0
 
-    for i in range(1, len(sorted_idx)):
-        if sorted_idx[i] == sorted_idx[i - 1] + 1:
+    for detected in detection_mask:
+        if detected:
             cur += 1
             best = max(best, cur)
         else:
-            cur = 1
+            cur = 0
 
     return best
 
@@ -393,14 +406,19 @@ def process_video(
 
     saved_faces: List[np.ndarray] = []
     used_indices: List[int] = []
+    detection_mask: List[bool] = []
+    face_confidences: List[float] = []
+    face_bboxes: List[Tuple[int, int, int, int]] = []
+    retry_used: List[bool] = []
     detection_failures = 0
 
     for idx in target_indices:
         frame_rgb = safe_read_frame(cap, idx)
-        face_crop = None
+        result: Optional[FaceDetectionResult] = None
+        was_retry = False
 
         if frame_rgb is not None:
-            face_crop = detect_face_crop(
+            result = detect_face_crop(
                 detector=detector,
                 frame_rgb=frame_rgb,
                 min_conf=cfg.min_face_confidence,
@@ -408,7 +426,7 @@ def process_video(
                 detector_max_side=cfg.detector_max_side,
             )
 
-        if face_crop is None:
+        if result is None:
             for offset in cfg.retry_offsets:
                 alt_idx = idx + offset
                 if alt_idx < 0 or alt_idx >= frame_count:
@@ -418,31 +436,37 @@ def process_video(
                 if alt_frame is None:
                     continue
 
-                face_crop = detect_face_crop(
+                result = detect_face_crop(
                     detector=detector,
                     frame_rgb=alt_frame,
                     min_conf=cfg.min_face_confidence,
                     margin_ratio=cfg.face_margin_ratio,
                     detector_max_side=cfg.detector_max_side,
                 )
-                if face_crop is not None:
+                if result is not None:
                     idx = alt_idx
+                    was_retry = True
                     break
 
-        if face_crop is None:
+        if result is None:
             detection_failures += 1
+            detection_mask.append(False)
             continue
 
-        face_crop = resize_face_crop(face_crop, cfg.output_size)
+        face_crop = resize_face_crop(result.crop, cfg.output_size)
         saved_faces.append(face_crop)
         used_indices.append(idx)
+        detection_mask.append(True)
+        face_confidences.append(result.confidence)
+        face_bboxes.append(result.bbox)
+        retry_used.append(was_retry)
 
     cap.release()
 
     sampled_count = len(target_indices)
     saved_count = len(saved_faces)
     detection_ratio = saved_count / max(sampled_count, 1)
-    contiguous_len = longest_contiguous_run(used_indices)
+    contiguous_len = longest_contiguous_detections(detection_mask)
 
     if saved_count < cfg.min_saved_faces:
         return {
@@ -510,6 +534,9 @@ def process_video(
         "detection_ratio": round(detection_ratio, 4),
         "max_contiguous_faces": contiguous_len,
         "used_frame_indices": used_indices,
+        "mean_confidence": round(float(np.mean(face_confidences)), 4) if face_confidences else 0.0,
+        "min_confidence": round(float(np.min(face_confidences)), 4) if face_confidences else 0.0,
+        "retry_count": sum(retry_used),
     }
 
 

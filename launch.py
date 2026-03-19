@@ -102,8 +102,8 @@ def check_environment() -> bool:
 
 
 # ─── 2. Поиск данных ──────────────────────────────────────────────────
-def find_preprocessed_data(data_path: str | None) -> str | None:
-    """Ищет preprocessed данные: real/ и fake/ с кадрами."""
+def find_preprocessed_data(data_path: str | None) -> list[str]:
+    """Ищет preprocessed данные: real/ и fake/ с кадрами. Возвращает все найденные."""
     candidates = []
     if data_path:
         candidates.append(Path(data_path))
@@ -117,6 +117,7 @@ def find_preprocessed_data(data_path: str | None) -> str | None:
         project / "preprocessed_frames",
     ]
 
+    found = []
     for p in candidates:
         if not p.is_dir():
             continue
@@ -129,13 +130,13 @@ def find_preprocessed_data(data_path: str | None) -> str | None:
             real_count = sum(1 for d in real_dirs[0].iterdir() if d.is_dir())
             fake_count = sum(1 for d in fake_dirs[0].iterdir() if d.is_dir())
             if real_count > 0 and fake_count > 0:
-                return str(p)
+                found.append(str(p))
 
-    return None
+    return found
 
 
-def find_raw_data(raw_path: str | None) -> str | None:
-    """Ищет raw видео (mp4/avi) с real/fake структурой."""
+def find_raw_data(raw_path: str | None) -> list[str]:
+    """Ищет raw видео (mp4/avi) с real/fake структурой. Возвращает все найденные."""
     candidates = []
     if raw_path:
         candidates.append(Path(raw_path))
@@ -148,6 +149,7 @@ def find_raw_data(raw_path: str | None) -> str | None:
     ]
 
     video_exts = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+    found = []
     for p in candidates:
         if not p.is_dir():
             continue
@@ -159,13 +161,13 @@ def find_raw_data(raw_path: str | None) -> str | None:
             # Проверяем что внутри есть видео
             sample_files = list(real_dirs[0].iterdir())[:5]
             if any(f.suffix.lower() in video_exts for f in sample_files):
-                return str(p)
+                found.append(str(p))
 
-    return None
+    return found
 
 
-def find_checkpoints(experiments_dir: str | None) -> list[str]:
-    """Ищет best_model.pt в experiments/."""
+def find_checkpoints(experiments_dir: str | None) -> dict[str, list[str]]:
+    """Ищет best_model.pt в experiments/. Возвращает {source_dir: [checkpoint_paths]}."""
     candidates = []
     if experiments_dir:
         candidates.append(Path(experiments_dir))
@@ -177,18 +179,19 @@ def find_checkpoints(experiments_dir: str | None) -> list[str]:
         project / "kaggle_output" / "project" / "experiments",
     ]
 
-    found = []
+    found: dict[str, list[str]] = {}
     for p in candidates:
         if not p.is_dir():
             continue
-        for pt in p.rglob("best_model.pt"):
-            found.append(str(pt))
+        pts = list(p.rglob("best_model.pt"))
+        if pts:
+            found[str(p)] = [str(pt) for pt in pts]
 
     return found
 
 
 def find_metrics(experiments_dir: str | None) -> list[str]:
-    """Ищет metrics.json в experiments/."""
+    """Ищет директории с metrics.json. Возвращает все найденные источники."""
     candidates = []
     if experiments_dir:
         candidates.append(Path(experiments_dir))
@@ -199,14 +202,30 @@ def find_metrics(experiments_dir: str | None) -> list[str]:
         project / "kaggle_output" / "experiments" / "experiments",
     ]
 
+    found = []
     for p in candidates:
         if not p.is_dir():
             continue
         metrics_files = list(p.rglob("metrics.json"))
         if metrics_files:
-            return [str(p)]
+            found.append(str(p))
 
-    return []
+    return found
+
+
+def require_single(items: list, item_name: str, flag: str) -> str:
+    """Если найден ровно один кандидат — возвращает его. Иначе — ошибка."""
+    if not items:
+        fail(f"{item_name} не найдены")
+        sys.exit(1)
+    if len(items) == 1:
+        return items[0]
+    # Множественные кандидаты — требуем явный выбор
+    fail(f"Найдено несколько источников {item_name}:")
+    for i, p in enumerate(items, 1):
+        print(f"    {i}. {p}")
+    print(f"\n  Укажите явно: python launch.py {flag} /path/to/...")
+    sys.exit(1)
 
 
 # ─── 3. Действия ──────────────────────────────────────────────────────
@@ -218,11 +237,15 @@ def do_preprocess(raw_data: str, output_dir: str) -> bool:
         fail(f"Скрипт не найден: {script}")
         return False
 
+    from config import Config
+    cfg = Config()
+    info(f"Параметры из Config: num_frames={cfg.num_frames}, spatial_size={cfg.spatial_size}")
+
     result = run([
         sys.executable, str(script),
         raw_data, output_dir,
-        "--max-frames", "16",
-        "--output-size", "224",
+        "--max-frames", str(cfg.num_frames),
+        "--output-size", str(cfg.spatial_size),
         "--device", "auto",
     ])
     return result.returncode == 0
@@ -260,16 +283,21 @@ def do_plots(experiments_dir: str) -> bool:
     return result.returncode == 0
 
 
-def do_demo() -> bool:
+def do_demo(experiments_dir: str | None = None) -> bool:
     header("Запуск Flask MVP")
     project = Path(__file__).parent
     script = project / "app.py"
 
     info("Flask MVP: http://127.0.0.1:7860")
+    if experiments_dir:
+        info(f"Источник моделей: {experiments_dir}")
     info("Ctrl+C для остановки")
     print()
 
-    result = run([sys.executable, str(script)])
+    cmd = [sys.executable, str(script)]
+    if experiments_dir:
+        cmd += ["--experiments-dir", experiments_dir]
+    result = run(cmd)
     return result.returncode == 0
 
 
@@ -316,31 +344,40 @@ def main():
     if args.check:
         # Показать что есть
         header("Состояние данных и моделей")
-        pp = find_preprocessed_data(args.data)
-        if pp:
-            info(f"Preprocessed данные: {pp}")
+        pp_list = find_preprocessed_data(args.data)
+        if pp_list:
+            for p in pp_list:
+                info(f"Preprocessed данные: {p}")
         else:
             warn("Preprocessed данные не найдены")
 
-        raw = find_raw_data(args.raw_data)
-        if raw:
-            info(f"Raw видео: {raw}")
+        raw_list = find_raw_data(args.raw_data)
+        if raw_list:
+            for r in raw_list:
+                info(f"Raw видео: {r}")
         else:
             warn("Raw видео не найдены")
 
-        ckpts = find_checkpoints(args.output)
-        if ckpts:
-            info(f"Обученные модели ({len(ckpts)}):")
-            for c in ckpts:
-                print(f"    {c}")
+        ckpt_map = find_checkpoints(args.output)
+        if ckpt_map:
+            total = sum(len(v) for v in ckpt_map.values())
+            info(f"Обученные модели ({total}) в {len(ckpt_map)} источнике(ах):")
+            for src, pts in ckpt_map.items():
+                print(f"    {src}/ ({len(pts)} моделей)")
+                for c in pts:
+                    print(f"      {c}")
         else:
             warn("Обученные модели не найдены")
 
-        metrics = find_metrics(args.output)
-        if metrics:
-            info(f"Метрики: {metrics[0]}")
+        metrics_list = find_metrics(args.output)
+        if metrics_list:
+            for m in metrics_list:
+                info(f"Метрики: {m}")
         else:
             warn("Метрики не найдены")
+
+        if len(pp_list) > 1 or len(ckpt_map) > 1 or len(metrics_list) > 1:
+            warn("Найдено несколько источников — используйте --data / --output для явного выбора")
         return
 
     if not env_ok:
@@ -349,37 +386,39 @@ def main():
 
     # ── Только демо ──
     if args.demo:
-        ckpts = find_checkpoints(args.output)
-        if not ckpts:
+        ckpt_map = find_checkpoints(args.output)
+        if not ckpt_map:
             fail("Модели не найдены. Сначала запустите обучение: python launch.py --train")
             sys.exit(1)
-        info(f"Найдено {len(ckpts)} моделей")
-        do_demo()
+        exp_dir = require_single(list(ckpt_map.keys()), "источников моделей", "--output")
+        total = len(ckpt_map[exp_dir])
+        info(f"Найдено {total} моделей в {exp_dir}")
+        do_demo(exp_dir)
         return
 
     # ── Только графики ──
     if args.plots:
-        metrics = find_metrics(args.output)
-        if not metrics:
-            fail("Метрики не найдены. Сначала запустите обучение.")
-            sys.exit(1)
-        do_plots(metrics[0])
+        metrics_list = find_metrics(args.output)
+        metrics_dir = require_single(metrics_list, "источников метрик", "--output")
+        do_plots(metrics_dir)
         return
 
     # ── Train или Full ──
     if args.train or args.full:
         # Шаг 1: Найти preprocessed данные
         header("2. Поиск данных")
-        preprocessed = find_preprocessed_data(args.data)
+        pp_list = find_preprocessed_data(args.data)
 
-        if preprocessed:
-            info(f"Preprocessed данные найдены: {preprocessed}")
+        if pp_list:
+            preprocessed = require_single(pp_list, "preprocessed данных", "--data")
+            info(f"Preprocessed данные: {preprocessed}")
         else:
             warn("Preprocessed данные не найдены")
 
             # Попробовать preprocessing из raw
-            raw = find_raw_data(args.raw_data)
-            if raw:
+            raw_list = find_raw_data(args.raw_data)
+            if raw_list:
+                raw = require_single(raw_list, "raw видео", "--raw-data")
                 info(f"Raw видео найдены: {raw}")
                 output_preprocessed = args.data or str(
                     project / "data" / "preprocessed_data" / "preprocessed_auto"
@@ -388,10 +427,11 @@ def main():
                 if not do_preprocess(raw, output_preprocessed):
                     fail("Preprocessing завершился с ошибкой")
                     sys.exit(1)
-                preprocessed = find_preprocessed_data(output_preprocessed)
-                if not preprocessed:
+                pp_after = find_preprocessed_data(output_preprocessed)
+                if not pp_after:
                     fail("После preprocessing данные не найдены")
                     sys.exit(1)
+                preprocessed = pp_after[0]
                 info(f"Preprocessing завершён: {preprocessed}")
             else:
                 fail("Данные не найдены. Укажите путь:")
@@ -401,14 +441,15 @@ def main():
 
         # Шаг 2: Проверить, есть ли уже обученные модели
         header("3. Проверка обученных моделей")
-        ckpts = find_checkpoints(args.output)
+        ckpt_map = find_checkpoints(args.output)
+        total_ckpts = sum(len(v) for v in ckpt_map.values())
 
-        if ckpts and not args.full:
-            info(f"Найдено {len(ckpts)} обученных моделей — пропускаю обучение")
+        if total_ckpts and not args.full:
+            info(f"Найдено {total_ckpts} обученных моделей — пропускаю обучение")
             info("Для переобучения: python launch.py --full")
         else:
-            if ckpts:
-                warn(f"Найдено {len(ckpts)} моделей, но запрошен --full — переобучаю")
+            if total_ckpts:
+                warn(f"Найдено {total_ckpts} моделей, но запрошен --full — переобучаю")
             if not do_train(
                 preprocessed, args.output,
                 batch_size=args.batch_size,
@@ -420,57 +461,64 @@ def main():
             info("Обучение завершено")
 
         # Шаг 3: Графики
-        metrics = find_metrics(args.output)
-        if metrics:
-            do_plots(metrics[0])
+        metrics_list = find_metrics(args.output)
+        if metrics_list:
+            metrics_dir = require_single(metrics_list, "источников метрик", "--output")
+            do_plots(metrics_dir)
         else:
             warn("Метрики не найдены — графики не сгенерированы")
 
         # Шаг 4: Демо (если --full)
         if args.full:
-            do_demo()
+            do_demo(args.output)
 
         return
 
     # ── Интерактивный режим (по умолчанию) ──
     header("2. Поиск данных и моделей")
 
-    preprocessed = find_preprocessed_data(args.data)
-    if preprocessed:
-        info(f"Preprocessed данные: {preprocessed}")
+    pp_list = find_preprocessed_data(args.data)
+    if pp_list:
+        for p in pp_list:
+            info(f"Preprocessed данные: {p}")
     else:
         warn("Preprocessed данные не найдены")
 
-    ckpts = find_checkpoints(args.output)
-    if ckpts:
-        info(f"Обученные модели: {len(ckpts)}")
+    ckpt_map = find_checkpoints(args.output)
+    total_ckpts = sum(len(v) for v in ckpt_map.values())
+    if total_ckpts:
+        info(f"Обученные модели: {total_ckpts}")
     else:
         warn("Обученные модели не найдены")
 
-    metrics = find_metrics(args.output)
-    if metrics:
-        info(f"Метрики: {metrics[0]}")
+    metrics_list = find_metrics(args.output)
+    if metrics_list:
+        for m in metrics_list:
+            info(f"Метрики: {m}")
 
     print()
     print(f"{BOLD}Доступные действия:{RESET}")
     print(f"  python launch.py --check      # проверка окружения")
-    if preprocessed and not ckpts:
+    if pp_list and not total_ckpts:
         print(f"  python launch.py --train      # запуск обучения")
-    if ckpts:
+    if total_ckpts:
         print(f"  python launch.py --demo       # запуск Flask MVP")
-    if metrics:
+    if metrics_list:
         print(f"  python launch.py --plots      # генерация графиков")
-    if preprocessed:
+    if pp_list:
         print(f"  python launch.py --full       # полный pipeline до демо")
     print()
 
     # Если есть модели — предложить демо
-    if ckpts:
+    if total_ckpts:
         print(f"{BOLD}Хотите запустить демо? (y/n):{RESET} ", end="", flush=True)
         try:
             answer = input().strip().lower()
             if answer in ("y", "yes", "д", "да", ""):
-                do_demo()
+                if len(ckpt_map) > 1:
+                    warn("Найдено несколько источников моделей — укажите: python launch.py --demo --output /path/")
+                else:
+                    do_demo(list(ckpt_map.keys())[0])
         except (EOFError, KeyboardInterrupt):
             print()
 

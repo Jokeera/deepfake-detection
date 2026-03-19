@@ -188,7 +188,15 @@ def train_one_epoch(
                 f"avg_loss={avg_loss:.4f}"
             )
 
-    avg_loss = total_loss / max(num_batches, 1)
+    skipped = total_batches - num_batches
+    if skipped > 0 and logger:
+        logger.warning(f"Пропущено {skipped}/{total_batches} батчей (non-finite loss)")
+    if num_batches == 0:
+        raise RuntimeError(
+            "Все батчи пропущены (non-finite loss). Обучение невозможно."
+        )
+
+    avg_loss = total_loss / num_batches
     train_metrics = compute_metrics(
         y_true=np.array(all_labels),
         y_proba=np.array(all_proba),
@@ -246,7 +254,13 @@ def evaluate_epoch(
         if return_predictions:
             all_video_ids.extend(batch["video_id"])
 
-    avg_loss = total_loss / max(num_batches, 1)
+    if num_batches == 0:
+        raise RuntimeError(
+            "Все батчи пропущены при валидации (non-finite loss). "
+            "Модель повреждена."
+        )
+
+    avg_loss = total_loss / num_batches
     metrics = compute_metrics(
         y_true=np.array(all_labels),
         y_proba=np.array(all_proba),

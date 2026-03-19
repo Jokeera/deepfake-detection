@@ -325,7 +325,8 @@ def main():
     if args.num_workers is not None:
         cfg.num_workers = args.num_workers
 
-    cfg.pin_memory = args.pin_memory
+    if args.pin_memory:
+        cfg.pin_memory = True
     cfg.device = args.device
     cfg.use_amp = not args.no_amp
 
@@ -381,6 +382,8 @@ def main():
         "total": len(preds),
         "error_rate": round((len(fn) + len(fp)) / max(len(preds), 1), 4),
     }
+    exp_dir = os.path.dirname(args.checkpoint)
+
     error_path = os.path.join(exp_dir, f"error_analysis_{args.split}.json")
     save_metrics(error_report, error_path)
     print(f"Error analysis: {error_path}")
@@ -398,8 +401,6 @@ def main():
     y_true = np.array([p["label"] for p in preds])
     y_proba = np.array([p["proba"] for p in preds])
     y_pred = (y_proba >= cfg.decision_threshold).astype(int)
-
-    exp_dir = os.path.dirname(args.checkpoint)
     save_confusion_matrix(
         y_true, y_pred,
         os.path.join(exp_dir, f"confusion_matrix_{args.split}.png"),

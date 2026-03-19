@@ -65,8 +65,8 @@ def find_real_fake_dirs(root: str) -> Tuple[str, str]:
     real_dir = None
     fake_dir = None
 
-    real_keywords = ["real", "original", "pristine"]
-    fake_keywords = ["fake", "manipulated", "altered", "deepfake"]
+    real_keywords = ["real", "original", "pristine", "actors"]
+    fake_keywords = ["fake", "manipulated", "altered", "deepfake", "df"]
 
     for dirname in subdirs:
         name_lower = dirname.lower()
