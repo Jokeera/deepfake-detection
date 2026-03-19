@@ -119,7 +119,7 @@ TRANSLATIONS = {
         "run_details": "Детали запуска",
         "model_type": "Тип модели",
         "fusion_type": "Тип fusion",
-        "dataset": "Датасет",
+        "dataset": "Обучен на датасете",
         "threshold": "Порог",
         "final_device": "Финальное устройство",
         "fallback": "Fallback",
@@ -238,7 +238,7 @@ TRANSLATIONS = {
         "run_details": "Run details",
         "model_type": "Model type",
         "fusion_type": "Fusion type",
-        "dataset": "Dataset",
+        "dataset": "Trained on dataset",
         "threshold": "Threshold",
         "final_device": "Final device",
         "fallback": "Fallback",
@@ -1374,17 +1374,25 @@ def tr(lang: str) -> Dict[str, str]:
     return TRANSLATIONS[lang]
 
 
-def _read_test_auc(checkpoint_path: str) -> float:
-    """Read Test AUC from metrics.json next to best_model.pt."""
+def _read_metrics_info(checkpoint_path: str) -> dict:
+    """Read Test AUC and optimal threshold from metrics.json next to best_model.pt."""
     metrics_path = Path(checkpoint_path).parent / "metrics.json"
+    info = {"test_auc": 0.0, "optimal_threshold": None}
     if metrics_path.exists():
         try:
             with open(metrics_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return float(data.get("test", {}).get("auc", 0.0))
+            info["test_auc"] = float(data.get("test", {}).get("auc", 0.0))
+            if "optimal_threshold" in data:
+                info["optimal_threshold"] = float(data["optimal_threshold"])
         except (json.JSONDecodeError, ValueError, KeyError):
             pass
-    return 0.0
+    return info
+
+
+def _read_test_auc(checkpoint_path: str) -> float:
+    """Read Test AUC from metrics.json next to best_model.pt."""
+    return _read_metrics_info(checkpoint_path)["test_auc"]
 
 
 def _model_type_label(exp_dir: str) -> str:
@@ -1413,12 +1421,13 @@ def discover_checkpoints() -> List[dict]:
         for p in root.rglob("best_model.pt"):
             exp_dir = p.parent.name
             path_str = str(p.resolve())
-            test_auc = _read_test_auc(path_str)
+            minfo = _read_metrics_info(path_str)
             found.append(
                 {
                     "path": path_str,
                     "exp_dir": exp_dir,
-                    "test_auc": test_auc,
+                    "test_auc": minfo["test_auc"],
+                    "optimal_threshold": minfo["optimal_threshold"],
                     "label": _model_type_label(exp_dir),
                 }
             )
@@ -1693,6 +1702,12 @@ def _run_app_inference_once(checkpoint_path_str: str, input_path: Path, device_n
 
     device = get_device(device_name)
 
+    print(f"\n{'='*60}")
+    print(f"[INFERENCE] Starting inference")
+    print(f"  Checkpoint : {checkpoint_path.parent.name}/{checkpoint_path.name}")
+    print(f"  Input      : {input_path.name}")
+    print(f"  Device     : {device_name}")
+
     checkpoint, cfg, model = load_checkpoint_and_cfg(
         checkpoint_path=checkpoint_path,
         device=device,
@@ -1700,11 +1715,22 @@ def _run_app_inference_once(checkpoint_path_str: str, input_path: Path, device_n
         use_amp=False,
     )
 
+    minfo = _read_metrics_info(checkpoint_path_str)
+    print(f"  Model type : {cfg.model_type}")
+    print(f"  Trained on : {cfg.dataset_name}")
+    print(f"  num_frames : {cfg.num_frames}")
+    print(f"  Threshold  : {cfg.decision_threshold:.4f}")
+    if minfo["optimal_threshold"] is not None:
+        print(f"  Optimal th.: {minfo['optimal_threshold']:.6f} (Youden's J, in-domain only)")
+
     spatial_tensor, temporal_tensor, prep_info = prepare_input_tensors(
         input_path=input_path,
         cfg=cfg,
         device=device,
     )
+
+    print(f"  Face prep  : {prep_info.get('face_preprocessing', 'unknown')}")
+    print(f"  Frames used: {prep_info['num_used_frames']}")
 
     result = run_inference(
         model=model,
@@ -1712,6 +1738,20 @@ def _run_app_inference_once(checkpoint_path_str: str, input_path: Path, device_n
         temporal_tensor=temporal_tensor,
         cfg=cfg,
     )
+
+    prob = result['probability_fake']
+    thresh = result['decision_threshold']
+    label = result['pred_label']
+    fw = result.get('fusion_weights', {})
+
+    print(f"\n  >> P(fake)  = {prob:.6f}")
+    print(f"  >> Threshold= {thresh:.4f}")
+    print(f"  >> Decision = {label.upper()}")
+    if fw:
+        print(f"  >> Fusion   = spatial:{fw['alpha_spatial']:.4f} temporal:{fw['alpha_temporal']:.4f}")
+    if prob >= 0.4 and prob <= 0.6:
+        print(f"  >> WARNING: Probability near threshold — low confidence prediction!")
+    print(f"{'='*60}\n", flush=True)
 
     payload = {
         "checkpoint": str(checkpoint_path),

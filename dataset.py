@@ -522,13 +522,63 @@ def _make_train_sampler(train_ds: DeepfakeVideoDataset, cfg: Config):
     )
 
 
+def build_multi_dataset_index(dataset_roots: List[str], dataset_names: List[str]) -> List[Dict]:
+    """
+    Объединяет видео-индексы из нескольких датасетов.
+
+    Каждому video_id добавляется префикс с именем датасета
+    и поле "source" для отслеживания происхождения.
+
+    Пример: video_id "real/vid_001" из "dfdc02" -> "dfdc02::real/vid_001"
+    """
+    combined: List[Dict] = []
+
+    for root, name in zip(dataset_roots, dataset_names):
+        index = build_video_index(root)
+        for entry in index:
+            entry["video_id"] = f"{name}::{entry['video_id']}"
+            entry["source"] = name
+            combined.append(entry)
+
+    # Защита от дубликатов
+    video_ids = [v["video_id"] for v in combined]
+    if len(video_ids) != len(set(video_ids)):
+        raise RuntimeError("Обнаружены дублирующиеся video_id в объединённом индексе.")
+
+    real_count = sum(1 for v in combined if v["label"] == 0)
+    fake_count = sum(1 for v in combined if v["label"] == 1)
+    print(f"[MULTI-DATA] Всего видео: {len(combined)} (real: {real_count}, fake: {fake_count})")
+    for name in dataset_names:
+        n = sum(1 for v in combined if v.get("source") == name)
+        r = sum(1 for v in combined if v.get("source") == name and v["label"] == 0)
+        f = sum(1 for v in combined if v.get("source") == name and v["label"] == 1)
+        print(f"  [{name}] {n} видео (real: {r}, fake: {f})")
+
+    return combined
+
+
 def create_dataloaders(cfg: Config) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Создаёт train / val / test DataLoader'ы.
+
+    Поддерживает multi-dataset: если cfg.dataset_root содержит "+" (напр.
+    "/path/to/dfdc02+/path/to/dfd01"), а cfg.dataset_name содержит "+"
+    (напр. "dfdc02+dfd01"), загружает несколько датасетов и объединяет.
     """
     cfg.validate()
 
-    index = build_video_index(cfg.dataset_root)
+    # Multi-dataset support
+    if "+" in cfg.dataset_root and "+" in cfg.dataset_name:
+        roots = [r.strip() for r in cfg.dataset_root.split("+")]
+        names = [n.strip() for n in cfg.dataset_name.split("+")]
+        if len(roots) != len(names):
+            raise ValueError(
+                f"Число путей ({len(roots)}) не совпадает с числом имён ({len(names)}). "
+                f"dataset_root и dataset_name должны содержать одинаковое количество записей через '+'."
+            )
+        index = build_multi_dataset_index(roots, names)
+    else:
+        index = build_video_index(cfg.dataset_root)
 
     if cfg.split_mode == "fixed":
         train_idx, val_idx, test_idx = load_split(cfg, index)
