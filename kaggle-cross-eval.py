@@ -108,14 +108,26 @@ def evaluate_cross_dataset(
     labels_arr = np.array(all_labels)
     metrics = compute_metrics(probs_arr, labels_arr)
 
+    # Per-class metrics for imbalanced datasets
+    preds = (probs_arr >= 0.5).astype(int)
+    real_mask = labels_arr == 0
+    fake_mask = labels_arr == 1
+    real_acc = float(np.mean(preds[real_mask] == 0)) if real_mask.any() else 0.0
+    fake_acc = float(np.mean(preds[fake_mask] == 1)) if fake_mask.any() else 0.0
+    balanced_acc = (real_acc + fake_acc) / 2.0
+
+    metrics["balanced_accuracy"] = round(balanced_acc, 4)
+    metrics["real_accuracy"] = round(real_acc, 4)
+    metrics["fake_accuracy"] = round(fake_acc, 4)
+
     return {
         "exp_dir": checkpoint_info["exp_dir"],
         "model_type": checkpoint_info["model_type"],
         "orig_test_auc": checkpoint_info["orig_test_auc"],
         "cross_dataset_metrics": metrics,
         "num_samples": len(all_probs),
-        "num_real": int((labels_arr == 0).sum()),
-        "num_fake": int((labels_arr == 1).sum()),
+        "num_real": int(real_mask.sum()),
+        "num_fake": int(fake_mask.sum()),
     }
 
 
@@ -149,11 +161,20 @@ def main():
     for c in checkpoints:
         print(f"  {c['exp_dir']} (type={c['model_type']}, orig AUC={c['orig_test_auc']})")
 
-    # Load cross-dataset
-    cross_index = build_video_index(args.cross_dataset)
+    # Load cross-dataset and filter short videos
+    cross_index_raw = build_video_index(args.cross_dataset)
+    cross_index = [v for v in cross_index_raw if len(v.get("frames", [])) >= 16]
+    skipped = len(cross_index_raw) - len(cross_index)
     num_real = sum(1 for v in cross_index if v["label"] == 0)
     num_fake = sum(1 for v in cross_index if v["label"] == 1)
     print(f"\nCross-dataset: {len(cross_index)} videos (real={num_real}, fake={num_fake})")
+    if skipped:
+        print(f"  Filtered out {skipped} videos with <16 frames")
+    if num_real > 0 and num_fake > 0:
+        ratio = num_fake / num_real
+        print(f"  Imbalance ratio (fake/real): {ratio:.1f}:1")
+        if ratio > 3:
+            print(f"  NOTE: Dataset is imbalanced. Using AUC + balanced accuracy.")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -180,18 +201,21 @@ def main():
         all_results.append(result)
 
     # Summary table
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("CROSS-DATASET EVALUATION SUMMARY")
-    print(f"Trained on: DFDC02 | Tested on: DFD01 ({len(cross_index)} videos)")
-    print("=" * 80)
-    print(f"{'Model':<30} {'In-domain AUC':>14} {'Cross AUC':>12} {'Δ AUC':>10} {'Cross Acc':>12}")
-    print("-" * 80)
+    print(f"Trained on: DFDC02 | Tested on: DFD01 ({len(cross_index)} videos, "
+          f"real={num_real}, fake={num_fake})")
+    print("=" * 100)
+    print(f"{'Model':<30} {'DFDC02 AUC':>11} {'DFD01 AUC':>10} {'Δ AUC':>8} "
+          f"{'Bal.Acc':>8} {'Real Acc':>9} {'Fake Acc':>9} {'EER':>7}")
+    print("-" * 100)
     for r in all_results:
         m = r["cross_dataset_metrics"]
         delta = m["auc"] - r["orig_test_auc"]
-        print(f"{r['exp_dir']:<30} {r['orig_test_auc']:>14.4f} {m['auc']:>12.4f} "
-              f"{delta:>+10.4f} {m['accuracy']:>12.4f}")
-    print("=" * 80)
+        print(f"{r['exp_dir']:<30} {r['orig_test_auc']:>11.4f} {m['auc']:>10.4f} "
+              f"{delta:>+8.4f} {m['balanced_accuracy']:>8.4f} "
+              f"{m['real_accuracy']:>9.4f} {m['fake_accuracy']:>9.4f} {m['eer']:>7.4f}")
+    print("=" * 100)
 
     # Save results
     output_path = os.path.join(args.output_dir, "cross_eval_results.json")
