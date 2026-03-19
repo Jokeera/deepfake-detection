@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -91,9 +92,10 @@ def evaluate_cross_dataset(
 
     all_probs = []
     all_labels = []
+    total_batches = len(loader)
 
     with torch.no_grad():
-        for batch in loader:
+        for batch_idx, batch in enumerate(loader):
             spatial = batch["spatial"].to(device)
             temporal = batch["temporal"].to(device)
             labels = batch["label"].numpy()
@@ -103,6 +105,11 @@ def evaluate_cross_dataset(
 
             all_probs.extend(probs.tolist())
             all_labels.extend(labels.tolist())
+
+            if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == total_batches:
+                done = len(all_probs)
+                total = len(cross_index)
+                sys.stdout.flush(); print(f"    [{done}/{total}] {done*100//total}%", flush=True)
 
     probs_arr = np.array(all_probs)
     labels_arr = np.array(all_labels)
@@ -153,13 +160,13 @@ def main():
             device = torch.device("cpu")
     else:
         device = torch.device(args.device)
-    print(f"Device: {device}")
+    sys.stdout.flush(); print(f"Device: {device}")
 
     # Find checkpoints
     checkpoints = find_checkpoints(args.checkpoints_dir)
-    print(f"Found {len(checkpoints)} checkpoints:")
+    sys.stdout.flush(); print(f"Found {len(checkpoints)} checkpoints:")
     for c in checkpoints:
-        print(f"  {c['exp_dir']} (type={c['model_type']}, orig AUC={c['orig_test_auc']})")
+        sys.stdout.flush(); print(f"  {c['exp_dir']} (type={c['model_type']}, orig AUC={c['orig_test_auc']})")
 
     # Load cross-dataset and filter short videos
     cross_index_raw = build_video_index(args.cross_dataset)
@@ -167,21 +174,21 @@ def main():
     skipped = len(cross_index_raw) - len(cross_index)
     num_real = sum(1 for v in cross_index if v["label"] == 0)
     num_fake = sum(1 for v in cross_index if v["label"] == 1)
-    print(f"\nCross-dataset: {len(cross_index)} videos (real={num_real}, fake={num_fake})")
+    sys.stdout.flush(); print(f"\nCross-dataset: {len(cross_index)} videos (real={num_real}, fake={num_fake})")
     if skipped:
-        print(f"  Filtered out {skipped} videos with <16 frames")
+        sys.stdout.flush(); print(f"  Filtered out {skipped} videos with <16 frames")
     if num_real > 0 and num_fake > 0:
         ratio = num_fake / num_real
-        print(f"  Imbalance ratio (fake/real): {ratio:.1f}:1")
+        sys.stdout.flush(); print(f"  Imbalance ratio (fake/real): {ratio:.1f}:1")
         if ratio > 3:
-            print(f"  NOTE: Dataset is imbalanced. Using AUC + balanced accuracy.")
+            sys.stdout.flush(); print(f"  NOTE: Dataset is imbalanced. Using AUC + balanced accuracy.")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Evaluate each checkpoint
     all_results = []
     for i, ckpt_info in enumerate(checkpoints, 1):
-        print(f"\n[{i}/{len(checkpoints)}] {ckpt_info['exp_dir']}")
+        sys.stdout.flush(); print(f"\n[{i}/{len(checkpoints)}] {ckpt_info['exp_dir']}")
         t0 = time.time()
 
         result = evaluate_cross_dataset(
@@ -193,9 +200,9 @@ def main():
         result["eval_time_sec"] = round(elapsed, 1)
 
         m = result["cross_dataset_metrics"]
-        print(f"  Cross AUC={m['auc']:.4f}  Acc={m['accuracy']:.4f}  "
+        sys.stdout.flush(); print(f"  Cross AUC={m['auc']:.4f}  Acc={m['accuracy']:.4f}  "
               f"F1={m['f1']:.4f}  EER={m['eer']:.4f}  ({elapsed:.0f}s)")
-        print(f"  In-domain AUC={result['orig_test_auc']:.4f} → "
+        sys.stdout.flush(); print(f"  In-domain AUC={result['orig_test_auc']:.4f} → "
               f"Cross AUC={m['auc']:.4f} (Δ={m['auc'] - result['orig_test_auc']:+.4f})")
 
         all_results.append(result)
@@ -203,16 +210,16 @@ def main():
     # Summary table
     print("\n" + "=" * 100)
     print("CROSS-DATASET EVALUATION SUMMARY")
-    print(f"Trained on: DFDC02 | Tested on: DFD01 ({len(cross_index)} videos, "
+    sys.stdout.flush(); print(f"Trained on: DFDC02 | Tested on: DFD01 ({len(cross_index)} videos, "
           f"real={num_real}, fake={num_fake})")
     print("=" * 100)
-    print(f"{'Model':<30} {'DFDC02 AUC':>11} {'DFD01 AUC':>10} {'Δ AUC':>8} "
+    sys.stdout.flush(); print(f"{'Model':<30} {'DFDC02 AUC':>11} {'DFD01 AUC':>10} {'Δ AUC':>8} "
           f"{'Bal.Acc':>8} {'Real Acc':>9} {'Fake Acc':>9} {'EER':>7}")
     print("-" * 100)
     for r in all_results:
         m = r["cross_dataset_metrics"]
         delta = m["auc"] - r["orig_test_auc"]
-        print(f"{r['exp_dir']:<30} {r['orig_test_auc']:>11.4f} {m['auc']:>10.4f} "
+        sys.stdout.flush(); print(f"{r['exp_dir']:<30} {r['orig_test_auc']:>11.4f} {m['auc']:>10.4f} "
               f"{delta:>+8.4f} {m['balanced_accuracy']:>8.4f} "
               f"{m['real_accuracy']:>9.4f} {m['fake_accuracy']:>9.4f} {m['eer']:>7.4f}")
     print("=" * 100)
@@ -221,7 +228,7 @@ def main():
     output_path = os.path.join(args.output_dir, "cross_eval_results.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False)
-    print(f"\nResults saved: {output_path}")
+    sys.stdout.flush(); print(f"\nResults saved: {output_path}")
 
 
 if __name__ == "__main__":
