@@ -1374,24 +1374,33 @@ def tr(lang: str) -> Dict[str, str]:
     return TRANSLATIONS[lang]
 
 
-def short_model_label(exp_dir: str) -> str:
+def _read_test_auc(checkpoint_path: str) -> float:
+    """Read Test AUC from metrics.json next to best_model.pt."""
+    metrics_path = Path(checkpoint_path).parent / "metrics.json"
+    if metrics_path.exists():
+        try:
+            with open(metrics_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return float(data.get("test", {}).get("auc", 0.0))
+        except (json.JSONDecodeError, ValueError, KeyError):
+            pass
+    return 0.0
+
+
+def _model_type_label(exp_dir: str) -> str:
     exp = exp_dir.lower()
-
-    if "dfdc02_full" in exp and "adaptive" in exp and "bs8" in exp:
-        return "A1 Full Adaptive (DFDC02, bs8) [recommended]"
-    if "dfdc02_full" in exp and "adaptive" in exp:
-        return "A1 Full Adaptive (DFDC02)"
-    if "dfdc02_spatial" in exp:
-        return "A2 Spatial Only (DFDC02)"
-    if "dfdc02_sequential" in exp:
-        return "A4 Sequential (DFDC02)"
-    if "dfdc02_temporal" in exp:
-        return "A3 Temporal Only (DFDC02)"
+    if "full" in exp and "adaptive" in exp:
+        return "A1 Full (dual-path, adaptive)"
+    if "spatial" in exp:
+        return "A2 Spatial-only"
+    if "temporal" in exp:
+        return "A3 Temporal-only"
+    if "sequential" in exp:
+        return "A4 Sequential (BiLSTM)"
     if "concat" in exp:
-        return "Full Concat"
+        return "A5 Full (concat)"
     if "gate" in exp:
-        return "Full Gate"
-
+        return "A6 Full (gate)"
     return exp_dir
 
 
@@ -1403,29 +1412,36 @@ def discover_checkpoints() -> List[dict]:
             continue
         for p in root.rglob("best_model.pt"):
             exp_dir = p.parent.name
+            path_str = str(p.resolve())
+            test_auc = _read_test_auc(path_str)
             found.append(
                 {
-                    "path": str(p.resolve()),
+                    "path": path_str,
                     "exp_dir": exp_dir,
-                    "label": short_model_label(exp_dir),
+                    "test_auc": test_auc,
+                    "label": _model_type_label(exp_dir),
                 }
             )
 
+    # Deduplicate by resolved path, keeping highest AUC if duplicated
     unique = {}
     for item in found:
-        unique[item["path"]] = item
+        existing = unique.get(item["path"])
+        if existing is None or item["test_auc"] > existing["test_auc"]:
+            unique[item["path"]] = item
     found = list(unique.values())
 
-    def score(item: dict) -> Tuple[int, int, int, float]:
-        exp = item["exp_dir"].lower()
-        path = Path(item["path"])
-        s1 = 1 if ("full" in exp and "adaptive" in exp) else 0
-        s2 = 1 if "dfdc02" in exp else 0
-        s3 = 1 if "bs8" in exp else 0
-        mtime = path.stat().st_mtime if path.exists() else 0.0
-        return (s1, s2, s3, mtime)
+    # Sort by Test AUC descending (best model first)
+    found.sort(key=lambda x: x["test_auc"], reverse=True)
 
-    found.sort(key=score, reverse=True)
+    # Mark the best one as recommended
+    if found:
+        best = found[0]
+        best["label"] = f"{best['label']} — AUC {best['test_auc']:.4f} [recommended]"
+        for item in found[1:]:
+            if item["test_auc"] > 0:
+                item["label"] = f"{item['label']} — AUC {item['test_auc']:.4f}"
+
     return found
 
 
