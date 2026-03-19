@@ -27,9 +27,25 @@ app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
-MODEL_SEARCH_DIRS = [
-    Path("./experiments"),
-]
+def _discover_model_dirs() -> List[Path]:
+    """Auto-discover all directories that may contain best_model.pt."""
+    candidates = [Path("./experiments")]
+    project = Path(__file__).parent
+    # Scan kaggle_output and any experiments* dirs
+    for pattern in ["kaggle_output/**/experiments", "experiments_*"]:
+        candidates.extend(project.glob(pattern))
+    # Deduplicate and keep only existing dirs
+    seen = set()
+    result = []
+    for p in candidates:
+        rp = p.resolve()
+        if rp not in seen and rp.is_dir():
+            seen.add(rp)
+            result.append(p)
+    return result if result else [Path("./experiments")]
+
+
+MODEL_SEARCH_DIRS = _discover_model_dirs()
 
 INLINE_VIDEO_MAX_MB = 25
 MAX_PREVIEW_FRAMES = 16
