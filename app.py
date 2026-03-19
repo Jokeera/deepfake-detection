@@ -1423,12 +1423,13 @@ def discover_checkpoints() -> List[dict]:
                 }
             )
 
-    # Deduplicate by resolved path, keeping highest AUC if duplicated
+    # Deduplicate by experiment name (same model may exist in multiple dirs)
     unique = {}
     for item in found:
-        existing = unique.get(item["path"])
+        key = item["exp_dir"]
+        existing = unique.get(key)
         if existing is None or item["test_auc"] > existing["test_auc"]:
-            unique[item["path"]] = item
+            unique[key] = item
     found = list(unique.values())
 
     # Sort by Test AUC descending (best model first)
