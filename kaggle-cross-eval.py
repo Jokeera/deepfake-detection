@@ -140,7 +140,7 @@ def main():
     parser.add_argument("--output_dir", type=str, default="./cross_eval_results")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--num_workers", type=int, default=2)
+    parser.add_argument("--num_workers", type=int, default=0)
     args = parser.parse_args()
 
     # Device
