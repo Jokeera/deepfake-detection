@@ -1,0 +1,3 @@
+dataset,width_mean,width_std,height_mean,height_std,n_videos
+preprocessed_DFD01_16,256.0,0.0,144.0,0.0,3431
+preprocessed_DFDC02_16,112.0,0.0,112.0,0.0,3293

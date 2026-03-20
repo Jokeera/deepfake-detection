@@ -1,0 +1,8 @@
+split,dataset,fake,real,All
+test,preprocessed_DFD01_16,463,40,503
+test,preprocessed_DFDC02_16,232,274,506
+train,preprocessed_DFD01_16,2135,273,2408
+train,preprocessed_DFDC02_16,1108,1190,2298
+val,preprocessed_DFD01_16,470,50,520
+val,preprocessed_DFDC02_16,226,263,489
+All,,4634,2090,6724
