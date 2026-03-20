@@ -174,11 +174,16 @@ def infer_label_from_path(video_path: Path) -> str:
     parts = [p.lower() for p in video_path.parts]
 
     real_keywords = {"real", "original", "pristine", "actors"}
-    fake_keywords = {"fake", "manipulated", "altered", "deepfake", "df"}
+    fake_keywords = {"fake", "manipulated", "altered", "deepfake"}
 
-    # Substring-поиск по каждой части пути отдельно (не по всему пути)
-    has_real = any(kw in part for part in parts for kw in real_keywords)
-    has_fake = any(kw in part for part in parts for kw in fake_keywords)
+    # Exact match по каждой части пути (не substring, чтобы 'df' не матчил 'dfd-01')
+    has_real = any(part in real_keywords for part in parts)
+    has_fake = any(part in fake_keywords for part in parts)
+
+    # Fallback: substring-поиск только если exact match не дал результата
+    if not has_real and not has_fake:
+        has_real = any(kw in part for part in parts for kw in real_keywords)
+        has_fake = any(kw in part for part in parts for kw in fake_keywords)
 
     if has_real and not has_fake:
         return "real"
