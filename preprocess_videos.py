@@ -64,8 +64,9 @@ class PreprocessConfig:
     # Мягче, чем было раньше, чтобы не терять лишние видео.
     min_detection_ratio: float = 0.55
 
-    # Для модели с num_frames=16 разумно держать дефолт 16.
-    # Если видео сохраняет меньше — dataset.py потом всё равно может отфильтровать.
+    # Минимум сохранённых face crops, чтобы видео не было отброшено.
+    # Для T=32: ставим 24 (75%), чтобы реальные видео не выпадали из-за
+    # пропусков детекции.  dataset.py дополнит недостающие кадры циклически.
     min_saved_faces: int = 16
 
     # Отступ вокруг лица.
@@ -633,7 +634,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-size", type=int, default=224, help="Размер face crop")
     parser.add_argument("--min-face-confidence", type=float, default=0.90, help="Порог confidence")
     parser.add_argument("--min-detection-ratio", type=float, default=0.55, help="Минимальная доля удачных detections")
-    parser.add_argument("--min-saved-faces", type=int, default=16, help="Минимум сохранённых face crops")
+    parser.add_argument("--min-saved-faces", type=int, default=None,
+                        help="Минимум сохранённых face crops (default: 75%% от max-frames)")
     parser.add_argument("--face-margin-ratio", type=float, default=0.20, help="Отступ вокруг лица")
     parser.add_argument("--detector-max-side", type=int, default=960, help="Макс. длинная сторона для detector input")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda", "mps"])
@@ -652,6 +654,11 @@ def main() -> None:
     from config import Config as TrainConfig
     max_frames = args.max_frames if args.max_frames is not None else TrainConfig().num_frames
 
+    # If --min-saved-faces not specified, default to 75% of max_frames
+    # Это позволяет сохранять видео, где часть кадров не прошла детекцию,
+    # при этом dataset.py дополнит недостающие кадры циклическим повтором.
+    min_saved = args.min_saved_faces if args.min_saved_faces is not None else max(1, int(max_frames * 0.75))
+
     cfg = PreprocessConfig(
         input_root=args.input_root,
         output_root=args.output_root,
@@ -659,7 +666,7 @@ def main() -> None:
         output_size=args.output_size,
         min_face_confidence=args.min_face_confidence,
         min_detection_ratio=args.min_detection_ratio,
-        min_saved_faces=args.min_saved_faces,
+        min_saved_faces=min_saved,
         face_margin_ratio=args.face_margin_ratio,
         detector_max_side=args.detector_max_side,
         device=args.device,
