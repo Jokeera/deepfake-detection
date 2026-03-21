@@ -260,11 +260,13 @@ class Config:
         if self.num_frames < 2:
             raise ValueError("num_frames должен быть >= 2 для video-level анализа.")
 
-        if self.min_frames_per_video < self.num_frames:
+        if self.min_frames_per_video > self.num_frames:
             raise ValueError(
-                "min_frames_per_video должен быть >= num_frames, "
-                "иначе часть видео не сможет сформировать клип."
+                "min_frames_per_video не может быть > num_frames."
             )
+        # Примечание: min_frames_per_video МОЖЕТ быть < num_frames,
+        # т.к. dataset.py дополняет недостающие кадры циклическим повтором.
+        # Для T=32 preprocessing сохраняет видео с >= 24 кадрами (75%).
 
         if self.spatial_size <= 0 or self.temporal_size <= 0:
             raise ValueError("spatial_size и temporal_size должны быть > 0.")
