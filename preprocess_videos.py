@@ -652,6 +652,36 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _load_existing_manifest(manifest_path: Path) -> Dict[str, Dict]:
+    """Load existing manifest.csv and return dict keyed by video_path."""
+    existing: Dict[str, Dict] = {}
+    if not manifest_path.exists():
+        return existing
+    with manifest_path.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            vp = row.get("video_path", "")
+            if vp:
+                existing[vp] = dict(row)
+    return existing
+
+
+def _find_already_processed(output_root: Path) -> set:
+    """Scan output_root/real/ and output_root/fake/ for existing video_id dirs
+    that have at least 1 .jpg file (i.e., successfully processed)."""
+    done = set()
+    for label in ("real", "fake"):
+        label_dir = output_root / label
+        if not label_dir.is_dir():
+            continue
+        for vid_dir in label_dir.iterdir():
+            if vid_dir.is_dir():
+                jpgs = list(vid_dir.glob("*.jpg"))
+                if jpgs:
+                    done.add(vid_dir.name)
+    return done
+
+
 def main() -> None:
     args = parse_args()
 
@@ -692,6 +722,19 @@ def main() -> None:
     videos = find_videos(str(input_root))
     print(f"[INFO] Найдено видео: {len(videos)}")
 
+    # ── RESUME LOGIC ──────────────────────────────────────────────────
+    # Scan output directory for already-processed video_ids.
+    # If a video was already saved (output dir with .jpg files exists),
+    # skip it entirely.  This allows resuming after timeout/crash.
+    already_done = _find_already_processed(output_root)
+    if already_done:
+        print(f"[INFO] RESUME: найдено {len(already_done)} уже обработанных видео, пропускаем их")
+
+    # Also load previous manifest rows so they appear in final manifest
+    manifest_path = output_root / "manifest.csv"
+    prev_manifest = _load_existing_manifest(manifest_path)
+    # ─────────────────────────────────────────────────────────────────
+
     detector = MTCNN(
         image_size=cfg.output_size,
         margin=0,
@@ -702,8 +745,38 @@ def main() -> None:
     )
 
     rows: List[Dict] = []
+    skipped = 0
 
     for video_path in tqdm(videos, desc="Preprocessing videos"):
+        # ── Check if already processed ──
+        video_id = make_safe_video_id(video_path, input_root)
+        if video_id in already_done:
+            # Re-use previous manifest row if available
+            vp_str = str(video_path)
+            if vp_str in prev_manifest:
+                rows.append(prev_manifest[vp_str])
+            else:
+                # Reconstruct minimal row
+                label = "unknown"
+                try:
+                    label = infer_label_from_path(video_path)
+                except Exception:
+                    pass
+                vid_dir = output_root / label / video_id
+                n_jpgs = len(list(vid_dir.glob("*.jpg"))) if vid_dir.is_dir() else 0
+                rows.append({
+                    "status": "saved",
+                    "reason": "",
+                    "label": label,
+                    "video_id": video_id,
+                    "video_path": vp_str,
+                    "output_dir": str(vid_dir),
+                    "saved_faces": n_jpgs,
+                    "resumed": "true",
+                })
+            skipped += 1
+            continue
+
         try:
             row = process_video(video_path, detector, cfg, input_root=input_root)
             rows.append(row)
@@ -719,7 +792,6 @@ def main() -> None:
             )
 
     if cfg.save_manifest:
-        manifest_path = output_root / "manifest.csv"
         summary_path = output_root / "summary.json"
 
         save_manifest_csv(rows, manifest_path)
@@ -736,7 +808,7 @@ def main() -> None:
     error_count = sum(1 for r in rows if r.get("status") == "error")
 
     print("\n=== PREPROCESS FINISHED ===")
-    print(f"Saved  : {saved_count}")
+    print(f"Saved  : {saved_count} (skipped/resumed: {skipped})")
     print(f"Dropped: {dropped_count}")
     print(f"Errors : {error_count}")
 
