@@ -299,7 +299,7 @@ docker run -p 7860:7860 -v $(pwd)/experiments:/app/experiments deepfake-detectio
 | MPS падает на inference | Использовать `--device cpu` |
 | Dataset не распознаётся | Проверить структуру: `real/` и `fake/` с JPEG кадрами |
 | Лицо не найдено в видео | Проверить, что видео содержит чёткое лицо |
-| `No models found` в app.py | Скачать веса: `kaggle datasets download ...` |
+| `No models found` в app.py | Положить `best_model.pt` в `experiments/<name>/` (см. инструкцию ниже) |
 
 ---
 
