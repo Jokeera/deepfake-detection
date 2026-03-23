@@ -1,11 +1,14 @@
-# Data & models (heavy files)
+# Data (heavy raw/preprocessed datasets)
 data/
+!data/Demo/
+!data/Demo/*.mp4
 preprocessed_frames/
-experiments/*/best_model.pt
+artifacts/
+
+# Experiments (re-generatable via training)
 experiments/*/predictions.csv
 experiments/*/eval_*.json
 experiments/*/cross_dataset_eval.json
-artifacts/
 
 # Kaggle output (re-downloadable)
 kaggle_output/
@@ -47,9 +50,6 @@ nohup.out
 # Uploads from Flask app
 uploads/
 
-# Generated presentation (re-creatable via create_presentation.py)
-presentation_defense.pptx
-
 # EDA heavy reports (re-generatable from notebooks)
 EDA/reports_final/FULL_EDA_REPORT.*
 EDA/reports_final/clean/
@@ -60,9 +60,6 @@ EDA/reports_final/tables/
 
 # Claude Code
 .claude/
-
-# Model weights (large binary files)
-*.pt
 
 # Archive
 archive_to_delete/
