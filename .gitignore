@@ -59,7 +59,7 @@ EDA/reports_final/plots/
 EDA/reports_final/tables/
 
 # Local config
-.claude/
+.local/
 
 # Archive
 archive_to_delete/
