@@ -58,7 +58,7 @@ EDA/reports_final/manifests/
 EDA/reports_final/plots/
 EDA/reports_final/tables/
 
-# Claude Code
+# Local config
 .claude/
 
 # Archive
