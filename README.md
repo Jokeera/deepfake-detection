@@ -246,7 +246,7 @@ deepfake-detection/
 │  experiments/ ←── download .tar.gz ←─────── /kaggle/working/experiments/     │
 │                                      │    │                                   │
 │  app.py (auto-discover models)       │    │                                   │
-│  evaluate.py, plot_*.py              │    │                                   │
+│  evaluate.py, infer.py               │    │                                   │
 └──────────────────────────────────────┘    └───────────────────────────────────┘
 ```
 
@@ -299,7 +299,19 @@ docker run -p 7860:7860 -v $(pwd)/experiments:/app/experiments deepfake-detectio
 | MPS падает на inference | Использовать `--device cpu` |
 | Dataset не распознаётся | Проверить структуру: `real/` и `fake/` с JPEG кадрами |
 | Лицо не найдено в видео | Проверить, что видео содержит чёткое лицо |
-| `No models found` в app.py | Положить `best_model.pt` в `experiments/<name>/` (см. инструкцию ниже) |
+| `No models found` в app.py | Скачать output тренировки с Kaggle и распаковать в `experiments/` |
+
+### Получение весов модели
+
+```bash
+# Скачать output Kaggle notebook (нужен Kaggle CLI)
+pip install kaggle
+kaggle kernels output alexandertarakanov/kaggle-train-3ds-t16 -p ./kaggle_output/
+
+# Распаковать
+tar xzf kaggle_output/results_3ds_t16.tar.gz -C .
+# → experiments/<exp_name>/best_model.pt появится
+```
 
 ---
 

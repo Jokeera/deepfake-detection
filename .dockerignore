@@ -9,4 +9,8 @@ data/DFD_01
 data/DFDC_Dataset_02
 data/preprocessed_data
 experiments
+kaggle_output
 EDA
+VKRDoc
+.claude
+*.pt

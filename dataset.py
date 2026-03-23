@@ -82,7 +82,7 @@ def find_real_fake_dirs(root: str) -> Tuple[str, str]:
             f"Не удалось найти real/fake директории в '{root}'.\n"
             f"Найденные подкаталоги: {subdirs}\n"
             f"Ожидаются директории, содержащие в названии real/original и fake/manipulated.\n"
-            f"Для диагностики проверьте структуру данных через scan_dataset.py."
+            f"Для диагностики проверьте, что директория содержит подпапки real/ и fake/ с JPEG кадрами."
         )
 
     return real_dir, fake_dir
