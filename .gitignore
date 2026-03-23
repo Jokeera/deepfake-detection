@@ -57,3 +57,12 @@ EDA/reports_final/interim/
 EDA/reports_final/manifests/
 EDA/reports_final/plots/
 EDA/reports_final/tables/
+
+# Claude Code
+.claude/
+
+# Model weights (large binary files)
+*.pt
+
+# Archive
+archive_to_delete/

@@ -16,14 +16,7 @@ cd deepfake-detection
 # 2. Установить зависимости
 pip install -r requirements.txt
 
-# 3. Проверить окружение
-python launch.py --check
-
-# 4. Скачать веса моделей (Kaggle CLI)
-pip install kaggle
-kaggle datasets download alexandertarakanov/deepfake-weights -p ./experiments/ --unzip
-
-# 5. Запустить Flask демо (загрузить видео → получить real/fake)
+# 3. Запустить Flask демо (загрузить видео → получить real/fake)
 python app.py
 # → http://127.0.0.1:7860
 ```
@@ -90,7 +83,7 @@ Input: Video (T frames, face-cropped via MTCNN)
 
 ### Эксперимент 3: Multi-dataset training (DFDC02 + DFD01, T=16)
 
-Обучение на объединённом датасете (6700+ видео). *Результаты обновятся после завершения.*
+Обучение на объединённом датасете (6724 видео).
 
 | Модель | Test AUC | Test Acc | Test F1 | EER | Best Epoch |
 |--------|----------|----------|---------|-----|------------|
@@ -99,9 +92,22 @@ Input: Video (T frames, face-cropped via MTCNN)
 | A2: Spatial-only | 0.8965 | 0.8909 | 0.9215 | 0.1717 | 10 |
 | A4: Sequential (BiLSTM) | 0.8950 | 0.8740 | 0.9088 | 0.1876 | 23 |
 
-### Эксперимент 4: T=32 (увеличенное число кадров)
+### Эксперимент 4: 3-Dataset training (DFDC02 + DFD01 + CelebDF, T=16)
 
-Препроцессинг: 32 кадра на видео вместо 16. *Результаты появятся после завершения тренировки.*
+Обучение на трёх датасетах (10023 видео). Добавлен Celeb-DF v2 (3299 видео).
+
+| Модель | Test AUC | Test Acc | Test F1 | EER | Best Epoch |
+|--------|----------|----------|---------|-----|------------|
+| **A1: Full (dual-path)** | **0.9587** | **0.9436** | **0.9622** | **0.1211** | 16 |
+| A3: Temporal-only | 0.9539 | 0.9150 | 0.9412 | 0.1168 | 17 |
+| A2: Spatial-only | 0.9494 | 0.9303 | 0.9538 | 0.1479 | 18 |
+| A4: Sequential (BiLSTM) | 0.9490 | 0.9203 | 0.9464 | 0.1393 | 20 |
+
+**Вывод:** Full dual-path модель — лучшая по AUC (0.9587). Мультидатасетное обучение значительно улучшает генерализацию.
+
+### Эксперимент 5: T=32 (увеличенное число кадров)
+
+Препроцессинг: 32 кадра на видео вместо 16. *Результаты появятся после завершения тренировки (ожидание квоты GPU).*
 
 ---
 
@@ -111,6 +117,7 @@ Input: Video (T frames, face-cropped via MTCNN)
 |---------|-------|------|------|----------|
 | DFDC02 | 3293 | 1727 | 1566 | Facebook DFDC |
 | DFD01 | 3431 | 363 | 3068 | Google/Jigsaw DFD |
+| CelebDF v2 | 3299 | 589 | 2710 | Celeb-DF |
 
 Данные предобработаны через MTCNN (face detection + crop):
 - **T=16**: 16 equidistant frames per video, 224×224
@@ -120,29 +127,14 @@ Input: Video (T frames, face-cropped via MTCNN)
 
 ## Воспроизведение экспериментов
 
-### Вариант 1: Локально (GPU)
-
-```bash
-# Полная серия ablation study (4 эксперимента, ~4 часа на T4)
-python run_experiments.py \
-  --dataset_root data/preprocessed_data/preprocessed_DFDC02_16 \
-  --dataset_name dfdc02 \
-  --output_dir ./experiments \
-  --level mandatory \
-  --device auto \
-  --batch_size 16 \
-  --max_epochs 30 \
-  --seed 42
-```
-
-### Вариант 2: Kaggle GPU
+### Вариант 1: Kaggle GPU (рекомендуется)
 
 1. Загрузить preprocessed_DFDC02_16 как Kaggle Dataset
 2. Открыть `kaggle-train.ipynb`
 3. Включить GPU accelerator
 4. Запустить ячейку — все 4 эксперимента выполнятся последовательно
 
-### Одна модель
+### Вариант 2: Локально (одна модель)
 
 ```bash
 python train.py \
@@ -189,17 +181,6 @@ python app.py
 
 ---
 
-## Визуализация результатов
-
-```bash
-python plot_training_curves.py \
-  --experiments_dir ./experiments
-```
-
-Генерирует 6 графиков: loss curves, val AUC, ablation study, overfit analysis, EER, convergence.
-
----
-
 ## Структура проекта
 
 ```text
@@ -211,11 +192,7 @@ deepfake-detection/
 ├── app.py                     # Flask MVP (двуязычный RU/EN)
 ├── dataset.py                 # Video-level dataset + DataLoader
 ├── preprocess_videos.py       # Face-centric preprocessing (MTCNN)
-├── run_experiments.py         # Автоматизация ablation study
-├── plot_training_curves.py    # Визуализация результатов
-├── launch.py                  # Единая точка входа (--check / --demo / --train / --full)
 ├── utils.py                   # Метрики, seed, логирование
-├── scan_dataset.py            # Диагностика структуры датасета
 ├── requirements.txt           # Зависимости
 ├── Dockerfile                 # Контейнеризация (Flask MVP)
 │
@@ -229,19 +206,24 @@ deepfake-detection/
 │   └── sequential.py          # A4: CNN → BiLSTM
 │
 ├── splits/
-│   └── split_seed42.json      # Фиксированное разбиение (70/15/15)
+│   ├── split_seed42.json          # Split: DFDC02 single-dataset
+│   └── split_multi_seed42.json    # Split: DFDC02+DFD01 multi-dataset
 │
-├── kaggle-train.ipynb         # Kaggle: ablation study
-├── kaggle-multi-train.ipynb   # Kaggle: multi-dataset training
-├── kaggle-preprocess.ipynb    # Kaggle: препроцессинг больших датасетов
-├── kaggle-cross-eval.ipynb    # Kaggle: cross-dataset evaluation
+├── kaggle-train.ipynb             # Kaggle: ablation study (single-dataset)
+├── kaggle-multi-train.ipynb       # Kaggle: multi-dataset training (2 datasets)
+├── kaggle-train-3ds-t16.ipynb     # Kaggle: 3-dataset T=16 training
+├── kaggle-train-3ds-t32-A1..A4.ipynb  # Kaggle: 3-dataset T=32 (4 parts)
+├── kaggle-preprocess.ipynb        # Kaggle: DFDC02 preprocessing
+├── kaggle-preprocess-dfd01-32.ipynb   # Kaggle: DFD01 T=32 preprocessing
+├── kaggle-preprocess-celebdf.ipynb    # Kaggle: CelebDF preprocessing
+├── kaggle-cross-eval.ipynb        # Kaggle: cross-dataset evaluation
 │
 ├── EDA/
 │   ├── VKR_EDA_Final_v5.ipynb # Exploratory Data Analysis
 │   └── reports_v5/            # EDA отчёты, графики, таблицы
 │
 └── VKRDoc/
-    ├── VKR_FINAL(v12).docx    # Текст диссертации
+    ├── VKR_FINAL(v14).docx    # Текст диссертации
     ├── PROJECT_GUIDE.md        # Подробный гайд по проекту
     ├── Defense_Presentation_v2.pptx
     └── Technical_Prep_v2.pptx
@@ -315,7 +297,7 @@ docker run -p 7860:7860 -v $(pwd)/experiments:/app/experiments deepfake-detectio
 |----------|---------|
 | `CUDA out of memory` | Уменьшить `batch_size` (8 или 4) |
 | MPS падает на inference | Использовать `--device cpu` |
-| Dataset не распознаётся | Запустить `python scan_dataset.py <path>` |
+| Dataset не распознаётся | Проверить структуру: `real/` и `fake/` с JPEG кадрами |
 | Лицо не найдено в видео | Проверить, что видео содержит чёткое лицо |
 | `No models found` в app.py | Скачать веса: `kaggle datasets download ...` |
 
