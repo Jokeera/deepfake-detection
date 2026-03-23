@@ -125,8 +125,31 @@ class ClassificationHead(nn.Module):
 
 class DualPathModel(nn.Module):
     """
-    Полная Dual-Path модель:
-    Spatial Branch || Temporal Branch -> Fusion -> Classification Head
+    Полная Dual-Path модель для детектирования deepfake видео.
+
+    Архитектура:
+        1. Spatial Branch (EfficientNet-B4): извлекает покадровые пространственные
+           признаки артефактов (размытие, несогласованность текстур, граничные
+           артефакты вокруг лица). Вход: [B, T, 3, 224, 224].
+
+        2. Temporal Branch (EfficientNet-B0 + Transformer): анализирует межкадровую
+           динамику через frame differences. Детектирует временные несогласованности
+           (мерцание, неестественные движения). Вход: [B, T-1, 3, 128, 128].
+
+        3. Fusion: объединяет представления двух ветвей. Поддерживает 3 варианта:
+           - adaptive: обучаемое взвешивание через softmax
+           - concat: конкатенация + линейная проекция
+           - gate: gated fusion через sigmoid
+
+        4. Classification Head: 512 → 256 → 128 → 1 с BatchNorm и Dropout.
+
+    Обучение в 2 фазы:
+        - Warmup (эпохи 1-5): spatial backbone заморожен, обучается только
+          temporal branch + fusion + head
+        - Fine-tuning (эпохи 6+): последние N блоков spatial backbone размораживаются
+          с пониженным learning rate
+
+    Параметры: ~24.7M (7.1M обучаемых в warmup, все 24.7M в fine-tuning)
     """
 
     def __init__(self, cfg):
