@@ -105,9 +105,27 @@ Input: Video (T frames, face-cropped via MTCNN)
 
 **Вывод:** Full dual-path модель — лучшая по AUC (0.9587). Мультидатасетное обучение значительно улучшает генерализацию.
 
-### Эксперимент 5: 3-Dataset training (T=32, увеличенное число кадров)
+### Эксперимент 5: 3-Dataset training (DFDC02 + DFD01 + CelebDF, T=32)
 
-Аналогичная серия экспериментов с 32 кадрами на видео. Ноутбуки подготовлены (`kaggle-train-3ds-t32-A1..A4.ipynb`), тренировка запланирована.
+Увеличение числа кадров до 32 (batch_size=8). Те же 3 датасета (~9953 видео после фильтрации).
+
+| Модель | Test AUC | Test Acc | Test F1 | EER | Best Epoch |
+|--------|----------|----------|---------|-----|------------|
+| **A1: Full (dual-path)** | **0.9943** | **0.9672** | **0.9776** | **0.0406** | 28 |
+| A2: Spatial-only | 0.9904 | 0.9579 | 0.9714 | 0.0467 | 19 |
+| A3: Temporal-only | 0.9883 | 0.9538 | 0.9687 | 0.0458 | 24 |
+| A4: Sequential (BiLSTM) | 0.9844 | 0.9492 | 0.9656 | 0.0571 | 11 |
+
+**Вывод:** T=32 значительно улучшает все метрики по сравнению с T=16. Full dual-path модель достигает AUC 0.9943, EER снижается с 0.1211 до 0.0406 (−66%). Ablation study подтверждён: full model лучше всех компонентов по отдельности.
+
+### Сводная таблица: влияние T и числа датасетов (Full model)
+
+| Конфигурация | T | Test AUC | EER |
+|---|---|---|---|
+| 1 датасет (DFDC02) | 16 | 0.9777 | 0.0749 |
+| 2 датасета (DFDC02+DFD01) | 16 | 0.8990 | 0.1937 |
+| 3 датасета (+CelebDF) | 16 | 0.9587 | 0.1211 |
+| **3 датасета (+CelebDF)** | **32** | **0.9943** | **0.0406** |
 
 ---
 
@@ -207,7 +225,8 @@ deepfake-detection/
 │
 ├── splits/
 │   ├── split_seed42.json          # Split: DFDC02 single-dataset
-│   └── split_multi_seed42.json    # Split: DFDC02+DFD01 multi-dataset
+│   ├── split_multi_seed42.json    # Split: DFDC02+DFD01 multi-dataset
+│   └── split_seed42_3ds_t16.json  # Split: 3-dataset (DFDC02+DFD01+CelebDF)
 │
 ├── kaggle-train.ipynb             # Kaggle: ablation study (single-dataset)
 ├── kaggle-multi-train.ipynb       # Kaggle: multi-dataset training (2 datasets)
@@ -223,7 +242,7 @@ deepfake-detection/
 │   └── reports_v5/            # EDA отчёты, графики, таблицы
 │
 └── VKRDoc/
-    ├── VKR_FINAL(v14).docx    # Текст диссертации
+    ├── VKR_FINAL(v15).docx    # Текст диссертации
     ├── PROJECT_GUIDE.md        # Подробный гайд по проекту
     ├── Defense_Presentation_v2.pptx
     └── Technical_Prep_v2.pptx
