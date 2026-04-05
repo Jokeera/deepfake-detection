@@ -245,9 +245,9 @@ deepfake-detection/
 │   └── reports_v5/            # EDA отчёты, графики, таблицы
 │
 └── VKRDoc/
-    ├── VKR_FINAL(v16).docx    # Текст диссертации
+    ├── VKR_FINAL.docx    # Текст диссертации
     ├── PROJECT_GUIDE.md        # Подробный гайд по проекту
-    ├── Defense_Presentation_v2.pptx
+    ├── Defense_Presentation.pptx
     └── Technical_Prep_v2.pptx
 ```
 
