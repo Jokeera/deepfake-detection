@@ -9,14 +9,17 @@
 ## Быстрый старт (для проверяющего)
 
 ```bash
-# 1. Клонировать
+# 1. Установить Git LFS (нужен для моделей и видео)
+git lfs install
+
+# 2. Клонировать
 git clone https://github.com/Jokeera/deepfake-detection.git
 cd deepfake-detection
 
-# 2. Установить зависимости
+# 3. Установить зависимости
 pip install -r requirements.txt
 
-# 3. Запустить Flask демо (загрузить видео → получить real/fake)
+# 4. Запустить Flask демо (загрузить видео → получить real/fake)
 python app.py
 # → http://127.0.0.1:7860
 ```
@@ -242,7 +245,7 @@ deepfake-detection/
 │   └── reports_v5/            # EDA отчёты, графики, таблицы
 │
 └── VKRDoc/
-    ├── VKR_FINAL(v15).docx    # Текст диссертации
+    ├── VKR_FINAL(v16).docx    # Текст диссертации
     ├── PROJECT_GUIDE.md        # Подробный гайд по проекту
     ├── Defense_Presentation_v2.pptx
     └── Technical_Prep_v2.pptx
