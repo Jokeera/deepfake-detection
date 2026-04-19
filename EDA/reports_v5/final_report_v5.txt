@@ -1,0 +1,60 @@
+======================================================================
+ФИНАЛЬНЫЙ АНАЛИТИЧЕСКИЙ ОТЧЁТ EDA v5
+Deepfake Detection: Multi-Dataset Analysis
+======================================================================
+
+1. ИНВЕНТАРИЗАЦИЯ
+----------------------------------------
+  DFD01_16            : real=  363, fake= 3068, total= 3431, ratio=8.45:1
+  DFDC02_16           : real= 1727, fake= 1566, total= 3293, ratio=1.10:1
+  COMBINED            : real= 2090, fake= 4634, total= 6724, ratio=2.22:1
+
+2. PREPROCESSING
+----------------------------------------
+  Face detector:      MTCNN (facenet-pytorch)
+  Frames per video:   16
+  Spatial input size: 224x224 (resize in dataset.py)
+  Temporal input size:128x128 (resize in dataset.py)
+
+3. РАЗМЕРЫ FACE CROPS
+----------------------------------------
+  preprocessed_DFD01_16: 256x144 (mode)
+  preprocessed_DFDC02_16: 112x112 (mode)
+  Crops < 224px: 6724 (100.0%) — will be upscaled
+
+4. КАЧЕСТВО КАДРОВ
+----------------------------------------
+  brightness  : 102.0 ± 30.7
+  contrast    : 46.5 ± 17.7
+  sharpness   : 1699.4 ± 2838.0
+  entropy     : 3.8 ± 0.2
+
+5. TEMPORAL ANALYSIS
+----------------------------------------
+  Проанализировано: 500 видео (sample)
+  mean_abs_diff            : 0.0591 ± 0.0402
+  std_diff                 : 0.1081 ± 0.0533
+  temporal_consistency     : -0.3640 ± 0.0988
+
+6. ДУБЛИКАТЫ И LEAKAGE
+----------------------------------------
+  Групп дубликатов (по hash): 7
+  Лишних копий: 7
+  Leakage по video_id: НЕТ ПЕРЕСЕЧЕНИЙ
+  Примечание: проверка по текущей схеме группировки (video_id).
+  Identity-level leakage между датасетами не исключён.
+
+7. SPLIT (симуляция)
+----------------------------------------
+  train: 4706
+  val  : 1009
+  test : 1009
+
+8. СТРАТЕГИЯ КОМПЕНСАЦИИ ДИСБАЛАНСА
+----------------------------------------
+  Combined ratio: 2.22:1
+  WeightedRandomSampler: включён (1/class_count)
+  Основная метрика: ROC-AUC (устойчива к дисбалансу)
+  Дополнительно: balanced_accuracy, F1, EER, PR-AUC
+
+======================================================================

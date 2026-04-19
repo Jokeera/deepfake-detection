@@ -1,0 +1,4 @@
+dataset,real,fake,total,ratio,majority_class,real_pct,fake_pct
+preprocessed_DFD01_16,363,3068,3431,8.45,fake,10.6,89.4
+preprocessed_DFDC02_16,1727,1566,3293,1.1,real,52.4,47.6
+COMBINED,2090,4634,6724,2.22,fake,31.1,68.9

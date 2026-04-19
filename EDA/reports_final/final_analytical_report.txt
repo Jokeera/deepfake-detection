@@ -1,0 +1,36 @@
+
+1. DATASET: DFDC02
+   Тип: normalized video clips (112×112, ~30fps, ~5sec)
+   Всего clips: 3293
+   Videos: 3293 | Images: 0
+   Real: 1727 | Fake: 1566
+   Balance ratio (fake/real): 0.91:1
+
+2. QUALITY
+   Удалено при очистке: 1
+   • too_short_video: 1
+
+3. LEAKAGE
+   Split key: group_id (file-level)
+   group_id unique per sample: Yes
+
+4. FACE ANALYSIS
+   Face det. rate (mean): 0.224
+   Samples failing threshold: 442
+
+5. TEMPORAL READINESS
+   Analyzed: 300 clips
+   Temporal-ready: 46 / 300
+   Mean face persistence: 0.258
+   Mean IFD: 16.99
+
+6. CLEANED DATASET
+   Total clean: 3292
+
+7. SPLIT
+   Train: 2304 | Val: 492 | Test: 496
+
+8. PREPROCESSING CONFIG
+   Face detection (training pipeline): MTCNN (facenet-pytorch)
+   Face detection (EDA audit): Haar Cascade (conservative estimate)
+   Clip length: T=16

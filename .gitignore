@@ -1,0 +1,70 @@
+# Data (heavy raw/preprocessed datasets)
+data/
+!data/Demo/
+!data/Demo/*.mp4
+preprocessed_frames/
+artifacts/
+
+# Experiments (re-generatable via training)
+experiments/*/predictions.csv
+experiments/*/eval_*.json
+experiments/*/cross_dataset_eval.json
+
+# Kaggle output (re-downloadable)
+kaggle_output/
+kaggle.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+venv/
+.venv/
+
+# Logs
+experiments/resilient_log*.txt
+experiments/run_manifest.json
+experiments/overnight_logs/
+nohup.out
+
+# Uploads from Flask app
+uploads/
+
+# EDA heavy reports (re-generatable from notebooks)
+EDA/reports_final/FULL_EDA_REPORT.*
+EDA/reports_final/clean/
+EDA/reports_final/interim/
+EDA/reports_final/manifests/
+EDA/reports_final/plots/
+EDA/reports_final/tables/
+
+# Local config
+.local/
+
+# Archive
+archive_to_delete/
+VKRDoc/VKR_FINAL(v13).docx
+
+# Old document versions
+VKRDoc/VKR_FINAL(v1[0-5]).docx
+VKRDoc/Defense_Presentation_v2.*
