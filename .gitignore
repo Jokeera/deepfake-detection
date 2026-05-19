@@ -68,3 +68,4 @@ VKRDoc/VKR_FINAL(v13).docx
 # Old document versions
 VKRDoc/VKR_FINAL(v1[0-5]).docx
 VKRDoc/Defense_Presentation_v2.*
+experiments/*/infer_*.json
